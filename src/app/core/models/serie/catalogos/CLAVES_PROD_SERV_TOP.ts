@@ -1,0 +1,17 @@
+export const CLAVES_PROD_SERV_TOP = [
+  { clave: '01010101', descripcion: 'No existe en el catálogo' },
+  { clave: '43232408', descripcion: 'Servicios de desarrollo de software' },
+  { clave: '81112103', descripcion: 'Servicios de diseño de páginas web' },
+  { clave: '78101802', descripcion: 'Servicios de consultoría en negocios' },
+  { clave: '80141609', descripcion: 'Servicios de marketing digital' },
+  { clave: '80101509', descripcion: 'Servicios de contabilidad' },
+  { clave: '81112101', descripcion: 'Servicios de soporte técnico' },
+  { clave: '50202301', descripcion: 'Servicios profesionales' },
+  { clave: '80111503', descripcion: 'Servicios de consultoría en tecnología' },
+  { clave: '95141601', descripcion: 'Servicios de capacitación' },
+  { clave: '80131803', descripcion: 'Publicidad y diseño gráfico' },
+  { clave: '25101702', descripcion: 'Equipos de cómputo' },
+  { clave: '44121618', descripcion: 'Software' },
+  { clave: '72154005', descripcion: 'Servicio de hospedaje web' },
+  { clave: '80111606', descripcion: 'Servicios legales' },
+];
