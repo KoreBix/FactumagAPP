@@ -49,7 +49,7 @@ jobs:
           } elseif (Test-Path $legacyPath) {
             $output = $legacyPath
           } else {
-            Write-Error "No se encontró la carpeta de build. Revisa angular.json y el nombre del proyecto."
+            Write-Error "No se encontro la carpeta de build. Revisa angular.json y el nombre del proyecto."
             exit 1
           }
 
@@ -67,19 +67,21 @@ jobs:
             New-Item -ItemType Directory -Path $backupDir -Force | Out-Null
             Write-Host "Creando backup en: $backupDir"
             robocopy "${{ env.DEPLOY_PATH }}" $backupDir /E /NFL /NDL /NJH /NJS /NC /NS
-            if ($LASTEXITCODE -ge 8) { exit $LASTEXITCODE } else { exit 0 }
+            if ($LASTEXITCODE -ge 8) { exit $LASTEXITCODE }
           } else {
             Write-Host "Primer deploy, no hay nada que respaldar."
             New-Item -ItemType Directory -Path "${{ env.DEPLOY_PATH }}" -Force | Out-Null
           }
 
-          # Mantener solo los últimos 5 backups
+          # Mantener solo los ultimos 5 backups
           if (Test-Path $backupRoot) {
             Get-ChildItem $backupRoot -Directory |
               Sort-Object CreationTime -Descending |
               Select-Object -Skip 5 |
               Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
           }
+
+          exit 0
         shell: powershell
 
       - name: Deploy a IIS con robocopy
@@ -91,9 +93,9 @@ jobs:
           # /XD = excluye carpetas que no queremos tocar
           robocopy "${{ steps.detect.outputs.build_path }}" "${{ env.DEPLOY_PATH }}" /MIR /R:3 /W:5 /NFL /NDL /NJH /NJS /XD "logs" "uploads"
 
-          # Robocopy usa códigos 0-7 como éxito, 8+ como error
+          # Robocopy usa codigos 0-7 como exito, 8+ como error
           if ($LASTEXITCODE -ge 8) {
-            Write-Error "Robocopy falló con código $LASTEXITCODE"
+            Write-Error "Robocopy fallo con codigo $LASTEXITCODE"
             exit $LASTEXITCODE
           }
           Write-Host "Deploy completado exitosamente"
@@ -104,10 +106,10 @@ jobs:
         run: |
           $indexPath = Join-Path "${{ env.DEPLOY_PATH }}" "index.html"
           if (Test-Path $indexPath) {
-            Write-Host "✓ index.html existe en el destino"
+            Write-Host "[OK] index.html existe en el destino"
             Get-Item $indexPath | Select-Object FullName, LastWriteTime, Length
           } else {
-            Write-Error "✗ index.html NO existe en el destino"
+            Write-Error "[ERROR] index.html NO existe en el destino"
             exit 1
           }
         shell: powershell
