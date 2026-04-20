@@ -1,18 +1,20 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { ReactiveFormsModule, FormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { RouterModule, ActivatedRoute, Router } from '@angular/router';
 import { environment } from '../../../environments/environment';
 import { REGIMENES_FISCALES } from '../../core/models/CFDI/Catálogos/REGIMENES_FISCALES';
 import { RfcService } from '../../core/services/RFC/RfcService';
+import { decodeId } from '../../core/utils/id-cipher';
 
 @Component({
   selector: 'app-rfc-form',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterModule],
+  imports: [CommonModule, ReactiveFormsModule, FormsModule, RouterModule],
   template: `
     <div class="animate-in" style="max-width:760px">
 
+      <!-- Header -->
       <div style="margin-bottom:24px">
         <a routerLink="/rfcs" class="btn-mag btn-ghost btn-sm" style="margin-bottom:16px">
           <span class="material-icons-round" style="font-size:16px">arrow_back</span>
@@ -22,22 +24,26 @@ import { RfcService } from '../../core/services/RFC/RfcService';
           {{ isEdit ? 'Editar RFC' : 'Nuevo RFC' }}
         </h1>
         <p style="font-size:14px;color:var(--text-muted);margin-top:4px">
-          {{ isEdit ? 'Actualiza los datos de tu empresa' : 'Registra una nueva empresa emisora de facturas' }}
+          {{ isEdit ? 'Actualiza los datos de tu empresa' : 'Completa los datos y opcionalmente sube tu CSD y logotipo' }}
         </p>
       </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+      <form [formGroup]="form" (ngSubmit)="guardar()" class="form-mag">
+        <div style="display:flex;flex-direction:column;gap:20px">
 
-        <!-- Datos del RFC -->
-        <div class="card-mag" style="grid-column:1/-1">
-          <div class="card-header-mag">
-            <div>
-              <div class="card-title">Datos fiscales</div>
-              <div class="card-subtitle">Información del SAT</div>
+          <!-- ── SECCIÓN 1: Datos fiscales ───────────────────────────── -->
+          <div class="card-mag">
+            <div class="card-header-mag">
+              <div>
+                <div class="card-title">Datos fiscales</div>
+                <div class="card-subtitle">Información del SAT</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;padding:5px 12px;background:var(--accent-light);border-radius:var(--radius-sm)">
+                <span class="material-icons-round" style="font-size:14px;color:var(--accent)">looks_one</span>
+                <span style="font-size:12px;font-weight:600;color:var(--accent)">Requerido</span>
+              </div>
             </div>
-          </div>
-          <div class="card-body-mag">
-            <form [formGroup]="form" (ngSubmit)="submit()" class="form-mag">
+            <div class="card-body-mag">
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 20px">
 
                 <div class="form-group" style="grid-column:1/-1">
@@ -77,69 +83,37 @@ import { RfcService } from '../../core/services/RFC/RfcService';
                   <div class="field-error" *ngIf="hasError('codigoPostal')">5 dígitos requeridos</div>
                 </div>
 
-                <div class="form-group" style="grid-column:1/-1">
-                  <label>Proveedor de timbrado</label>
-                  <div style="display:flex;gap:12px">
-                    <label *ngFor="let p of proveedores"
-                           style="display:flex;align-items:center;gap:8px;padding:12px 16px;border:1.5px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;flex:1;transition:var(--transition)"
-                           [style.border-color]="form.get('proveedorDefault')?.value === p.value ? 'var(--accent)' : 'var(--border)'"
-                           [style.background]="form.get('proveedorDefault')?.value === p.value ? 'var(--accent-light)' : 'transparent'">
-                      <input type="radio" formControlName="proveedorDefault" [value]="p.value" style="display:none">
-                      <span class="material-icons-round"
-                            [style.color]="form.get('proveedorDefault')?.value === p.value ? 'var(--accent)' : 'var(--text-muted)'"
-                            style="font-size:20px">cloud</span>
-                      <div>
-                        <div style="font-size:14px;font-weight:600">{{ p.label }}</div>
-                        <div style="font-size:11px;color:var(--text-muted)">{{ p.desc }}</div>
-                      </div>
-                    </label>
-                  </div>
-                </div>
               </div>
-
-              <div *ngIf="errorMsg"
-                   style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:var(--radius-sm);padding:12px 14px;font-size:13px;color:var(--danger);margin-bottom:16px;display:flex;gap:8px;align-items:center">
-                <span class="material-icons-round" style="font-size:18px">error_outline</span>
-                {{ errorMsg }}
-              </div>
-
-              <div style="display:flex;gap:10px;justify-content:flex-end">
-                <a routerLink="/rfcs" class="btn-mag btn-ghost">Cancelar</a>
-                <button type="submit" class="btn-mag btn-primary" [disabled]="loading">
-                  <span *ngIf="loading" class="material-icons-round"
-                        style="font-size:18px;animation:spin 1s linear infinite">refresh</span>
-                  <span *ngIf="!loading" class="material-icons-round" style="font-size:18px">save</span>
-                  {{ loading ? 'Guardando...' : (isEdit ? 'Actualizar' : 'Registrar RFC') }}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-
-        <!-- CSD Upload -->
-        <div class="card-mag" style="grid-column:1/-1" *ngIf="isEdit">
-          <div class="card-header-mag">
-            <div>
-              <div class="card-title">Certificado CSD</div>
-              <div class="card-subtitle">Arrastra tus archivos o haz clic para seleccionarlos</div>
-            </div>
-            <div *ngIf="csdCargado"
-                 style="display:flex;align-items:center;gap:8px;padding:7px 14px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:var(--radius-sm)">
-              <span class="material-icons-round" style="color:var(--success);font-size:18px">verified</span>
-              <span style="font-size:13px;font-weight:600;color:var(--success)">CSD activo</span>
             </div>
           </div>
 
-          <div class="card-body-mag">
-            <form [formGroup]="csdForm" (ngSubmit)="submitCsd()" class="form-mag">
+          <!-- ── SECCIÓN 2: CSD ──────────────────────────────────────── -->
+          <div class="card-mag">
+            <div class="card-header-mag">
+              <div>
+                <div class="card-title">Certificado CSD</div>
+                <div class="card-subtitle">Opcional — puedes agregarlo después</div>
+              </div>
+              <div *ngIf="csdCargado && !cerNombre"
+                   style="display:flex;align-items:center;gap:6px;padding:5px 12px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:var(--radius-sm)">
+                <span class="material-icons-round" style="font-size:14px;color:var(--success)">verified</span>
+                <span style="font-size:12px;font-weight:600;color:var(--success)">CSD activo</span>
+              </div>
+              <div *ngIf="cerNombre || keyNombre"
+                   style="display:flex;align-items:center;gap:6px;padding:5px 12px;background:rgba(59,99,217,0.08);border-radius:var(--radius-sm)">
+                <span class="material-icons-round" style="font-size:14px;color:var(--accent)">upload_file</span>
+                <span style="font-size:12px;font-weight:600;color:var(--accent)">Se subirá al guardar</span>
+              </div>
+            </div>
+            <div class="card-body-mag">
 
               <!-- Zonas drag & drop -->
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
 
                 <!-- .CER -->
                 <div>
-                  <label style="font-size:13px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:6px">
-                    Archivo .CER *
+                  <label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:6px">
+                    Archivo .CER
                   </label>
                   <div (click)="fileCer.click()"
                        (dragover)="$event.preventDefault(); draggingCer=true"
@@ -147,29 +121,26 @@ import { RfcService } from '../../core/services/RFC/RfcService';
                        (drop)="onDrop($event,'cer')"
                        [style.border-color]="draggingCer ? 'var(--accent)' : (cerNombre ? 'var(--success)' : 'var(--border)')"
                        [style.background]="cerNombre ? 'rgba(16,185,129,0.04)' : (draggingCer ? 'var(--accent-light)' : 'var(--bg-card2)')"
-                       style="border:2px dashed;border-radius:var(--radius-md);padding:28px 16px;text-align:center;cursor:pointer;transition:var(--transition)">
+                       style="border:2px dashed;border-radius:var(--radius-md);padding:24px 12px;text-align:center;cursor:pointer;transition:var(--transition)">
                     <input #fileCer type="file" accept=".cer" style="display:none"
                            (change)="onFileChange($event,'cer')">
                     <span class="material-icons-round"
                           [style.color]="cerNombre ? 'var(--success)' : 'var(--text-muted)'"
-                          style="font-size:40px;display:block;margin-bottom:8px">
+                          style="font-size:36px;display:block;margin-bottom:6px">
                       {{ cerNombre ? 'task_alt' : 'upload_file' }}
                     </span>
-                    <div *ngIf="!cerNombre">
-                      <div style="font-size:14px;font-weight:600;color:var(--text-secondary)">Arrastra o haz clic</div>
-                      <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Archivo <strong>.cer</strong></div>
-                    </div>
+                    <div *ngIf="!cerNombre" style="font-size:13px;color:var(--text-secondary)">Arrastra o haz clic<br><small style="color:var(--text-muted)">.cer</small></div>
                     <div *ngIf="cerNombre">
-                      <div style="font-size:13px;font-weight:700;color:var(--success)">{{ cerNombre }}</div>
-                      <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Clic para cambiar</div>
+                      <div style="font-size:12px;font-weight:700;color:var(--success);word-break:break-all">{{ cerNombre }}</div>
+                      <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Clic para cambiar</div>
                     </div>
                   </div>
                 </div>
 
                 <!-- .KEY -->
                 <div>
-                  <label style="font-size:13px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:6px">
-                    Archivo .KEY *
+                  <label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:6px">
+                    Archivo .KEY
                   </label>
                   <div (click)="fileKey.click()"
                        (dragover)="$event.preventDefault(); draggingKey=true"
@@ -177,21 +148,18 @@ import { RfcService } from '../../core/services/RFC/RfcService';
                        (drop)="onDrop($event,'key')"
                        [style.border-color]="draggingKey ? 'var(--accent)' : (keyNombre ? 'var(--success)' : 'var(--border)')"
                        [style.background]="keyNombre ? 'rgba(16,185,129,0.04)' : (draggingKey ? 'var(--accent-light)' : 'var(--bg-card2)')"
-                       style="border:2px dashed;border-radius:var(--radius-md);padding:28px 16px;text-align:center;cursor:pointer;transition:var(--transition)">
+                       style="border:2px dashed;border-radius:var(--radius-md);padding:24px 12px;text-align:center;cursor:pointer;transition:var(--transition)">
                     <input #fileKey type="file" accept=".key" style="display:none"
                            (change)="onFileChange($event,'key')">
                     <span class="material-icons-round"
                           [style.color]="keyNombre ? 'var(--success)' : 'var(--text-muted)'"
-                          style="font-size:40px;display:block;margin-bottom:8px">
+                          style="font-size:36px;display:block;margin-bottom:6px">
                       {{ keyNombre ? 'task_alt' : 'key' }}
                     </span>
-                    <div *ngIf="!keyNombre">
-                      <div style="font-size:14px;font-weight:600;color:var(--text-secondary)">Arrastra o haz clic</div>
-                      <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Archivo <strong>.key</strong></div>
-                    </div>
+                    <div *ngIf="!keyNombre" style="font-size:13px;color:var(--text-secondary)">Arrastra o haz clic<br><small style="color:var(--text-muted)">.key</small></div>
                     <div *ngIf="keyNombre">
-                      <div style="font-size:13px;font-weight:700;color:var(--success)">{{ keyNombre }}</div>
-                      <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Clic para cambiar</div>
+                      <div style="font-size:12px;font-weight:700;color:var(--success);word-break:break-all">{{ keyNombre }}</div>
+                      <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Clic para cambiar</div>
                     </div>
                   </div>
                 </div>
@@ -199,12 +167,12 @@ import { RfcService } from '../../core/services/RFC/RfcService';
 
               <!-- Contraseña + Vigencia -->
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 20px">
-
                 <div class="form-group">
-                  <label>Contraseña del CSD *</label>
+                  <label>Contraseña del CSD</label>
                   <div style="position:relative">
                     <input [type]="showCsdPass ? 'text' : 'password'"
-                           formControlName="password" class="form-control-mag"
+                           [(ngModel)]="csdPassword" [ngModelOptions]="{standalone:true}"
+                           class="form-control-mag"
                            placeholder="Contraseña del certificado"
                            style="padding-right:44px">
                     <button type="button"
@@ -216,153 +184,159 @@ import { RfcService } from '../../core/services/RFC/RfcService';
                     </button>
                   </div>
                 </div>
-
                 <div class="form-group">
                   <label style="display:flex;align-items:center;gap:6px">
-                    Fecha de vigencia *
+                    Vigencia
                     <span *ngIf="vigenciaAutoDetectada"
-                          style="background:rgba(0,212,170,0.1);color:var(--accent);font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px">
+                          style="background:var(--accent-light);color:var(--accent);font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px">
                       AUTO
                     </span>
                   </label>
-                  <input type="datetime-local" formControlName="vigencia" class="form-control-mag">
+                  <input type="datetime-local" [(ngModel)]="csdVigencia" [ngModelOptions]="{standalone:true}"
+                         class="form-control-mag">
                   <div class="field-hint" *ngIf="vigenciaAutoDetectada">
                     <span class="material-icons-round" style="font-size:12px;vertical-align:middle">auto_awesome</span>
-                    Detectada automáticamente del certificado
+                    Detectada del certificado
                   </div>
                 </div>
               </div>
 
-              <!-- Mensajes -->
-              <div *ngIf="csdError"
-                   style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:var(--radius-sm);padding:12px 14px;font-size:13px;color:var(--danger);margin-bottom:16px;display:flex;gap:8px;align-items:center">
-                <span class="material-icons-round" style="font-size:18px">error_outline</span>
-                {{ csdError }}
-              </div>
-              <div *ngIf="csdSuccess"
-                   style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:var(--radius-sm);padding:12px 14px;font-size:13px;color:var(--success);margin-bottom:16px;display:flex;gap:8px;align-items:center">
-                <span class="material-icons-round" style="font-size:18px">check_circle</span>
-                CSD guardado correctamente ✅
-              </div>
+            </div>
+          </div>
 
-              <div style="display:flex;justify-content:flex-end">
-                <button type="submit" class="btn-mag btn-primary"
-                        [disabled]="loadingCsd || !cerNombre || !keyNombre">
-                  <span *ngIf="loadingCsd" class="material-icons-round"
-                        style="font-size:18px;animation:spin 1s linear infinite">refresh</span>
-                  <span *ngIf="!loadingCsd" class="material-icons-round" style="font-size:18px">upload_file</span>
-                  {{ loadingCsd ? 'Subiendo...' : 'Guardar CSD' }}
+          <!-- ── SECCIÓN 3: Logo ─────────────────────────────────────── -->
+          <div class="card-mag">
+            <div class="card-header-mag">
+              <div>
+                <div class="card-title">Logotipo</div>
+                <div class="card-subtitle">Opcional — aparecerá en tus facturas PDF</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <div *ngIf="logoPendiente"
+                     style="display:flex;align-items:center;gap:6px;padding:5px 12px;background:rgba(59,99,217,0.08);border-radius:var(--radius-sm)">
+                  <span class="material-icons-round" style="font-size:14px;color:var(--accent)">image</span>
+                  <span style="font-size:12px;font-weight:600;color:var(--accent)">Se subirá al guardar</span>
+                </div>
+                <button type="button" class="btn-mag btn-danger btn-sm"
+                        *ngIf="logoPreview && !logoPendiente && isEdit"
+                        (click)="eliminarLogo()" [disabled]="loadingLogo">
+                  <span class="material-icons-round" style="font-size:15px">delete</span> Quitar
+                </button>
+                <button type="button" class="btn-mag btn-danger btn-sm"
+                        *ngIf="logoPendiente"
+                        (click)="cancelarLogo()">
+                  <span class="material-icons-round" style="font-size:15px">close</span> Cancelar
                 </button>
               </div>
-            </form>
-          </div>
-        </div>
-
-
-        <!-- Logo del RFC -->
-        <div class="card-mag" style="grid-column:1/-1" *ngIf="isEdit">
-          <div class="card-header-mag">
-            <div>
-              <div class="card-title">Logotipo</div>
-              <div class="card-subtitle">Se incluirá en tus facturas PDF</div>
             </div>
-            <button type="button" class="btn-mag btn-danger btn-sm"
-                    *ngIf="logoPreview" (click)="eliminarLogo()"
-                    [disabled]="loadingLogo">
-              <span class="material-icons-round" style="font-size:15px">delete</span> Quitar logo
+            <div class="card-body-mag">
+
+              <!-- Preview -->
+              <div *ngIf="logoPreview" style="margin-bottom:16px">
+                <div style="display:inline-block;padding:16px 24px;background:white;border:1px solid var(--border-light);border-radius:var(--radius-md)">
+                  <img [src]="logoPreview" alt="Logo RFC"
+                       style="max-height:70px;max-width:260px;object-fit:contain;display:block">
+                </div>
+              </div>
+
+              <!-- Zona drag & drop -->
+              <div (click)="fileLogo.click()"
+                   (dragover)="$event.preventDefault(); draggingLogo=true"
+                   (dragleave)="draggingLogo=false"
+                   (drop)="onDropLogo($event)"
+                   [style.border-color]="draggingLogo ? 'var(--accent)' : 'var(--border)'"
+                   [style.background]="draggingLogo ? 'var(--accent-light)' : 'var(--bg-card2)'"
+                   style="border:2px dashed;border-radius:var(--radius-md);padding:28px 16px;text-align:center;cursor:pointer;transition:var(--transition)">
+                <input #fileLogo type="file" accept="image/png,image/jpeg,image/jpg,image/svg+xml"
+                       style="display:none" (change)="onLogoFileChange($event)">
+                <span class="material-icons-round" style="font-size:40px;display:block;margin-bottom:8px;color:var(--text-muted)">
+                  add_photo_alternate
+                </span>
+                <div style="font-size:14px;font-weight:600;color:var(--text-secondary)">
+                  {{ logoPreview ? 'Haz clic para cambiar el logo' : 'Arrastra o haz clic para subir tu logo' }}
+                </div>
+                <div style="font-size:12px;color:var(--text-muted);margin-top:4px">
+                  PNG, JPG o SVG · Máximo 500KB
+                </div>
+              </div>
+
+              <div *ngIf="logoError"
+                   style="margin-top:10px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:var(--danger);display:flex;gap:8px;align-items:center">
+                <span class="material-icons-round" style="font-size:18px">error_outline</span>
+                {{ logoError }}
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Progreso de guardado ────────────────────────────────── -->
+          <div *ngIf="saving"
+               style="background:var(--bg-card);border:1px solid var(--border-light);border-radius:var(--radius-md);padding:16px 20px;display:flex;align-items:center;gap:14px">
+            <span class="material-icons-round" style="font-size:22px;color:var(--accent);animation:spin 1s linear infinite">refresh</span>
+            <div>
+              <div style="font-size:14px;font-weight:600;color:var(--text-primary)">{{ pasoActual }}</div>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:2px">{{ pasoDetalle }}</div>
+            </div>
+          </div>
+
+          <!-- ── Error global ────────────────────────────────────────── -->
+          <div *ngIf="errorMsg"
+               style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:var(--radius-sm);padding:12px 14px;font-size:13px;color:var(--danger);display:flex;gap:8px;align-items:center">
+            <span class="material-icons-round" style="font-size:18px">error_outline</span>
+            {{ errorMsg }}
+          </div>
+
+          <!-- ── Acciones ────────────────────────────────────────────── -->
+          <div style="display:flex;gap:10px;justify-content:flex-end;padding-bottom:32px">
+            <a routerLink="/rfcs" class="btn-mag btn-ghost" [class.disabled]="saving">Cancelar</a>
+            <button type="submit" class="btn-mag btn-primary btn-lg" [disabled]="saving">
+              <span *ngIf="saving" class="material-icons-round" style="font-size:18px;animation:spin 1s linear infinite">refresh</span>
+              <span *ngIf="!saving" class="material-icons-round" style="font-size:18px">save</span>
+              {{ saving ? 'Guardando...' : (isEdit ? 'Guardar cambios' : 'Registrar RFC') }}
             </button>
           </div>
-          <div class="card-body-mag">
 
-            <!-- Preview actual -->
-            <div *ngIf="logoPreview" style="margin-bottom:20px">
-              <div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">
-                Logo actual
-              </div>
-              <div style="display:inline-block;padding:16px 24px;background:white;border:1px solid var(--border-light);border-radius:var(--radius-md)">
-                <img [src]="logoPreview" alt="Logo RFC"
-                     style="max-height:80px;max-width:280px;object-fit:contain;display:block">
-              </div>
-            </div>
-
-            <!-- Zona de carga -->
-            <div (click)="fileLogo.click()"
-                 (dragover)="$event.preventDefault(); draggingLogo=true"
-                 (dragleave)="draggingLogo=false"
-                 (drop)="onDropLogo($event)"
-                 [style.border-color]="draggingLogo ? 'var(--accent)' : 'var(--border)'"
-                 [style.background]="draggingLogo ? 'var(--accent-light)' : 'var(--bg-card2)'"
-                 style="border:2px dashed;border-radius:var(--radius-md);padding:32px 16px;text-align:center;cursor:pointer;transition:var(--transition)">
-              <input #fileLogo type="file" accept="image/png,image/jpeg,image/jpg,image/svg+xml"
-                     style="display:none" (change)="onLogoFileChange($event)">
-              <span class="material-icons-round" style="font-size:48px;display:block;margin-bottom:10px;color:var(--text-muted)">
-                add_photo_alternate
-              </span>
-              <div style="font-size:14px;font-weight:600;color:var(--text-secondary)">
-                {{ logoPreview ? 'Haz clic para cambiar el logo' : 'Arrastra o haz clic para subir tu logo' }}
-              </div>
-              <div style="font-size:12px;color:var(--text-muted);margin-top:6px">
-                PNG, JPG o SVG · Máximo 500KB · Recomendado: fondo transparente
-              </div>
-            </div>
-
-            <!-- Mensajes -->
-            <div *ngIf="logoError"
-                 style="margin-top:12px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:var(--radius-sm);padding:12px 14px;font-size:13px;color:var(--danger);display:flex;gap:8px;align-items:center">
-              <span class="material-icons-round" style="font-size:18px">error_outline</span>
-              {{ logoError }}
-            </div>
-            <div *ngIf="logoSuccess"
-                 style="margin-top:12px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:var(--radius-sm);padding:12px 14px;font-size:13px;color:var(--success);display:flex;gap:8px;align-items:center">
-              <span class="material-icons-round" style="font-size:18px">check_circle</span>
-              Logo actualizado correctamente ✅
-            </div>
-
-            <div *ngIf="loadingLogo" style="margin-top:12px;text-align:center;color:var(--text-muted);font-size:13px">
-              <span class="material-icons-round" style="font-size:18px;vertical-align:middle;animation:spin 1s linear infinite">refresh</span>
-              Subiendo logo...
-            </div>
-          </div>
         </div>
-
-      </div>
+      </form>
     </div>
     <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
   `
 })
 export class RfcFormComponent implements OnInit {
-  form:    FormGroup;
-  csdForm: FormGroup;
+  form: FormGroup;
 
-  isEdit   = false;
-  rfcId:   number | null = null;
-  loading    = false;
-  loadingCsd = false;
-  errorMsg   = '';
-  csdError   = '';
-  csdSuccess = false;
-  csdCargado = false;
+  isEdit  = false;
+  rfcId:  number | null = null;
+  saving  = false;
+  errorMsg = '';
 
+  // CSD
   cerNombre = '';
   keyNombre = '';
+  csdCertB64 = '';
+  csdKeyB64  = '';
+  csdPassword = '';
+  csdVigencia = '';
   draggingCer = false;
   draggingKey = false;
   showCsdPass = false;
   vigenciaAutoDetectada = false;
+  csdCargado = false;
 
   // Logo
   readonly apiBase = environment.facturacionUrl;
-  logoPreview:   string | null = null;
-  draggingLogo = false;
-  loadingLogo  = false;
-  logoError    = '';
-  logoSuccess  = false;
+  logoPreview:  string | null = null;
+  logoPendiente = false;
+  logoBase64    = '';
+  logoExtension = '';
+  draggingLogo  = false;
+  loadingLogo   = false;
+  logoError     = '';
+
+  // Progreso
+  pasoActual  = '';
+  pasoDetalle = '';
 
   regimenes = REGIMENES_FISCALES;
-  proveedores = [
-    { value: 'Facturama', label: 'Facturama', desc: 'API oficial de Facturama' },
-    { value: 'NovaCfdi',  label: 'NovaCFDI',  desc: 'Proveedor alternativo'   }
-  ];
 
   constructor(
     private fb:     FormBuilder,
@@ -377,26 +351,19 @@ export class RfcFormComponent implements OnInit {
       codigoPostal:     ['', [Validators.required, Validators.minLength(5), Validators.maxLength(5)]],
       proveedorDefault: ['Facturama']
     });
-
-    this.csdForm = this.fb.group({
-      certificadoBase64: ['', Validators.required],
-      llaveBase64:       ['', Validators.required],
-      password:          ['', Validators.required],
-      vigencia:          ['', Validators.required]
-    });
   }
 
   ngOnInit(): void {
-    const id = this.route.snapshot.paramMap.get('id');
-    if (id) {
+    const raw = this.route.snapshot.paramMap.get('id');
+    if (raw) {
+      const decoded = decodeId(raw);
+      if (!decoded) { this.router.navigate(['/rfcs']); return; }
       this.isEdit = true;
-      this.rfcId  = +id;
+      this.rfcId  = decoded;
       this.rfcSvc.obtener(this.rfcId).subscribe(rfc => {
         this.form.patchValue(rfc);
         this.csdCargado = rfc.csdActivo;
-        // Si ya tiene logo, mostrar URL completa
         if (rfc.logoUrl) {
-          // logoUrl es relativa ("/logos/rfc_5.png"), construir URL completa
           this.logoPreview = `${this.apiBase}${rfc.logoUrl}?t=${Date.now()}`;
         }
       });
@@ -408,7 +375,7 @@ export class RfcFormComponent implements OnInit {
     return c.invalid && c.touched;
   }
 
-  // ── Manejo de archivos ─────────────────────────────────────────────────────
+  // ── Archivos CSD ──────────────────────────────────────────────────────────
 
   onFileChange(event: Event, tipo: 'cer' | 'key'): void {
     const input = event.target as HTMLInputElement;
@@ -427,56 +394,33 @@ export class RfcFormComponent implements OnInit {
   private procesarArchivo(file: File, tipo: 'cer' | 'key'): void {
     const reader = new FileReader();
     reader.onload = (e) => {
-      // Quitar el prefijo "data:...;base64,"
       const base64 = (e.target?.result as string).split(',')[1];
       if (tipo === 'cer') {
         this.cerNombre = file.name;
-        this.csdForm.patchValue({ certificadoBase64: base64 });
+        this.csdCertB64 = base64;
         this.intentarExtraerVigencia(base64);
       } else {
         this.keyNombre = file.name;
-        this.csdForm.patchValue({ llaveBase64: base64 });
+        this.csdKeyB64 = base64;
       }
     };
     reader.readAsDataURL(file);
   }
 
-  // Extrae la fecha de vigencia del certificado .cer (DER/ASN.1)
   private intentarExtraerVigencia(base64: string): void {
     try {
-      const binary = atob(base64);
-      // Buscar fechas UTCTime en el DER: formato YYMMDDHHMMSSZ
+      const binary  = atob(base64);
       const matches = binary.match(/\d{12}Z/g);
       if (matches && matches.length >= 2) {
-        const raw  = matches[1]; // La segunda fecha = notAfter (vigencia)
+        const raw  = matches[1];
         const yy   = parseInt(raw.substring(0, 2));
         const year = yy >= 50 ? 1900 + yy : 2000 + yy;
-        const fecha = `${year}-${raw.substring(2,4)}-${raw.substring(4,6)}T${raw.substring(6,8)}:${raw.substring(8,10)}:${raw.substring(10,12)}`;
-        this.csdForm.patchValue({ vigencia: fecha });
+        this.csdVigencia = `${year}-${raw.substring(2,4)}-${raw.substring(4,6)}T${raw.substring(6,8)}:${raw.substring(8,10)}:${raw.substring(10,12)}`;
         this.vigenciaAutoDetectada = true;
       }
     } catch {
       this.vigenciaAutoDetectada = false;
     }
-  }
-
-  // ── Submit RFC ─────────────────────────────────────────────────────────────
-
-  submit(): void {
-    this.form.markAllAsTouched();
-    if (this.form.invalid) return;
-    this.loading  = true;
-    this.errorMsg = '';
-    const req$ = this.isEdit
-      ? this.rfcSvc.actualizar(this.rfcId!, this.form.value)
-      : this.rfcSvc.crear(this.form.value);
-    req$.subscribe({
-      next:  () => this.router.navigate(['/rfcs']),
-      error: (err) => {
-        this.loading  = false;
-        this.errorMsg = err.error?.error ?? 'Error al guardar el RFC.';
-      }
-    });
   }
 
   // ── Logo ──────────────────────────────────────────────────────────────────
@@ -496,53 +440,26 @@ export class RfcFormComponent implements OnInit {
 
   private procesarLogo(file: File): void {
     this.logoError = '';
-    const maxSize = 500 * 1024; // 500KB
-    if (file.size > maxSize) {
-      this.logoError = 'El archivo supera los 500KB permitidos.';
-      return;
-    }
-    const tiposValidos = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml'];
-    if (!tiposValidos.includes(file.type)) {
-      this.logoError = 'Solo se permiten PNG, JPG o SVG.';
-      return;
-    }
-    // Obtener extensión del tipo MIME
-    const extMap: Record<string, string> = {
-      'image/png': 'png',
-      'image/jpeg': 'jpg',
-      'image/jpg': 'jpg',
-      'image/svg+xml': 'svg'
-    };
-    const extension = extMap[file.type] ?? 'png';
-
+    if (file.size > 500 * 1024) { this.logoError = 'El archivo supera los 500KB permitidos.'; return; }
+    const tipos = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml'];
+    if (!tipos.includes(file.type)) { this.logoError = 'Solo se permiten PNG, JPG o SVG.'; return; }
+    const extMap: Record<string, string> = { 'image/png':'png','image/jpeg':'jpg','image/jpg':'jpg','image/svg+xml':'svg' };
+    this.logoExtension = extMap[file.type] ?? 'png';
     const reader = new FileReader();
     reader.onload = (e) => {
       const dataUrl = e.target?.result as string;
-      const base64  = dataUrl.split(',')[1];
-      // Preview local inmediato mientras sube
-      this.logoPreview = dataUrl;
-      this.subirLogo(base64, extension);
+      this.logoBase64   = dataUrl.split(',')[1];
+      this.logoPreview  = dataUrl;
+      this.logoPendiente = true;
     };
     reader.readAsDataURL(file);
   }
 
-  private subirLogo(base64: string, extension: string): void {
-    if (!this.rfcId) return;
-    this.loadingLogo = true;
-    this.rfcSvc.subirLogo(this.rfcId, base64, extension).subscribe({
-      next: (res) => {
-        this.loadingLogo = false;
-        this.logoSuccess = true;
-        // Actualizar preview con URL real del servidor
-        this.logoPreview = `${this.apiBase}/logos/rfc_${this.rfcId}.${extension}?t=${Date.now()}`;
-        setTimeout(() => this.logoSuccess = false, 4000);
-      },
-      error: (err) => {
-        this.loadingLogo = false;
-        this.logoError   = err.error?.error ?? 'Error al subir el logo.';
-        this.logoPreview = null;
-      }
-    });
+  cancelarLogo(): void {
+    this.logoBase64    = '';
+    this.logoExtension = '';
+    this.logoPendiente = false;
+    this.logoPreview   = null;
   }
 
   eliminarLogo(): void {
@@ -550,10 +467,9 @@ export class RfcFormComponent implements OnInit {
     this.loadingLogo = true;
     this.rfcSvc.eliminarLogo(this.rfcId).subscribe({
       next: () => {
-        this.loadingLogo = false;
-        this.logoPreview = null;
-        this.logoSuccess = true;
-        setTimeout(() => this.logoSuccess = false, 4000);
+        this.loadingLogo  = false;
+        this.logoPreview  = null;
+        this.logoPendiente = false;
       },
       error: (err) => {
         this.loadingLogo = false;
@@ -562,27 +478,78 @@ export class RfcFormComponent implements OnInit {
     });
   }
 
-  // ── Submit CSD ─────────────────────────────────────────────────────────────
+  // ── Guardar todo ──────────────────────────────────────────────────────────
 
-  submitCsd(): void {
-    this.csdError = '';
-    if (!this.cerNombre) { this.csdError = 'Selecciona el archivo .cer'; return; }
-    if (!this.keyNombre) { this.csdError = 'Selecciona el archivo .key'; return; }
-    this.csdForm.markAllAsTouched();
-    if (this.csdForm.invalid) { this.csdError = 'Completa todos los campos'; return; }
-    if (!this.rfcId) return;
-    this.loadingCsd = true;
-    this.rfcSvc.subirCsd(this.rfcId, this.csdForm.value).subscribe({
-      next: () => {
-        this.loadingCsd = false;
-        this.csdSuccess = true;
-        this.csdCargado = true;
-        setTimeout(() => this.csdSuccess = false, 5000);
+  guardar(): void {
+    this.form.markAllAsTouched();
+    if (this.form.invalid) return;
+    this.saving   = true;
+    this.errorMsg = '';
+
+    // Paso 1 — crear o actualizar RFC
+    this.pasoActual  = 'Guardando datos fiscales...';
+    this.pasoDetalle = 'RFC · Razón Social · Régimen · Código Postal';
+
+    const req$ = this.isEdit
+      ? this.rfcSvc.actualizar(this.rfcId!, this.form.value)
+      : this.rfcSvc.crear(this.form.value);
+
+    req$.subscribe({
+      next: (rfc) => {
+        const id = this.rfcId ?? rfc.id;
+        this.rfcId = id;
+        this.subirCsdSiHay(id);
       },
       error: (err) => {
-        this.loadingCsd = false;
-        this.csdError   = err.error?.error ?? 'Error al guardar el CSD.';
+        this.saving   = false;
+        this.errorMsg = err.error?.error ?? 'Error al guardar los datos fiscales.';
       }
     });
+  }
+
+  private subirCsdSiHay(id: number): void {
+    const tieneCsd = this.cerNombre && this.keyNombre && this.csdPassword && this.csdVigencia;
+    if (!tieneCsd) { this.subirLogoSiHay(id); return; }
+
+    this.pasoActual  = 'Subiendo certificado CSD...';
+    this.pasoDetalle = `${this.cerNombre} · ${this.keyNombre}`;
+
+    this.rfcSvc.subirCsd(id, {
+      certificadoBase64: this.csdCertB64,
+      llaveBase64:       this.csdKeyB64,
+      password:          this.csdPassword,
+      vigencia:          this.csdVigencia
+    }).subscribe({
+      next: () => {
+        this.csdCargado = true;
+        this.subirLogoSiHay(id);
+      },
+      error: (err) => {
+        this.saving   = false;
+        this.errorMsg = `RFC guardado, pero el CSD falló: ${err.error?.error ?? 'error desconocido'}. Puedes subirlo de nuevo editando el RFC.`;
+      }
+    });
+  }
+
+  private subirLogoSiHay(id: number): void {
+    if (!this.logoPendiente || !this.logoBase64) { this.finalizar(); return; }
+
+    this.pasoActual  = 'Subiendo logotipo...';
+    this.pasoDetalle = 'Se incluirá en tus facturas PDF';
+
+    this.rfcSvc.subirLogo(id, this.logoBase64, this.logoExtension).subscribe({
+      next: () => {
+        this.logoPendiente = false;
+        this.finalizar();
+      },
+      error: (err) => {
+        this.saving   = false;
+        this.errorMsg = `RFC guardado, pero el logo falló: ${err.error?.error ?? 'error desconocido'}. Puedes subirlo de nuevo editando el RFC.`;
+      }
+    });
+  }
+
+  private finalizar(): void {
+    this.router.navigate(['/rfcs']);
   }
 }

@@ -1,10 +1,12 @@
 import { Injectable } from '@angular/core';
 import { HttpInterceptor, HttpRequest, HttpHandler, HttpEvent, HttpErrorResponse } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
-import { catchError } from 'rxjs/operators';
+import { catchError, tap } from 'rxjs/operators';
 import { CanActivateFn, Router } from '@angular/router';
 import { inject } from '@angular/core';
 import { AuthService } from '../services/Auth/AuthService';
+
+const LOG = '[JwtInterceptor]';
 
 // ── JWT Interceptor ───────────────────────────────────────────────────────────
 @Injectable()
@@ -18,6 +20,16 @@ export class JwtInterceptor implements HttpInterceptor {
     }
 
     const token = this.auth.getToken();
+
+    // ── Log de salida ─────────────────────────────────────────────────────────
+    const tokenResumen = token
+      ? `${token.substring(0, 20)}... (${token.length} chars)`
+      : 'SIN TOKEN';
+    console.groupCollapsed(`${LOG} → ${req.method} ${req.url}`);
+    console.log('Token:', tokenResumen);
+    console.log('Hora:', new Date().toISOString());
+    console.groupEnd();
+
     if (token) {
       req = req.clone({
         setHeaders: { Authorization: `Bearer ${token}` }
@@ -25,14 +37,37 @@ export class JwtInterceptor implements HttpInterceptor {
     }
 
     return next.handle(req).pipe(
-      catchError((err: HttpErrorResponse) => {
-        if (err.status === 401) {
-          // ── Solo hacer logout si NO estamos ya en proceso de logout ──────────
-          const path = window.location.pathname;
-          if (!path.startsWith('/sso/') && !path.startsWith('/auth/')) {
-            this.auth.logout();
+      tap({
+        next: (event: any) => {
+          if (event?.status) {
+            console.log(`${LOG} ✅ ${req.method} ${req.url} → ${event.status}`);
           }
         }
+      }),
+      catchError((err: HttpErrorResponse) => {
+        // ── Log detallado de error ────────────────────────────────────────────
+        console.group(`${LOG} ❌ ERROR ${err.status} — ${req.method} ${req.url}`);
+        console.log('Status:', err.status, err.statusText);
+        console.log('URL:', err.url);
+        console.log('Hora:', new Date().toISOString());
+        console.log('Token enviado:', tokenResumen);
+        console.log('Body del error:', err.error);
+        console.log('Headers de la request:', req.headers.keys());
+
+        if (err.status === 401) {
+          const path = window.location.pathname;
+          console.warn(`${LOG} 🔐 401 detectado en "${path}" — se va a hacer logout`);
+          console.warn('Posibles causas: token expirado, token inválido, endpoint requiere auth diferente');
+
+          if (!path.startsWith('/sso/') && !path.startsWith('/auth/')) {
+            console.warn(`${LOG} 🚪 Ejecutando logout...`);
+            this.auth.logout();
+          } else {
+            console.warn(`${LOG} ⏭ Logout omitido (ruta pública: ${path})`);
+          }
+        }
+        console.groupEnd();
+
         return throwError(() => err);
       })
     );

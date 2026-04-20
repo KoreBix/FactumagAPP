@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { RfcList } from '../../core/models/RFC/RfcList';
 import { RfcService } from '../../core/services/RFC/RfcService';
+import { encodeId } from '../../core/utils/id-cipher';
 
 @Component({
   selector: 'app-rfcs',
@@ -58,7 +59,7 @@ import { RfcService } from '../../core/services/RFC/RfcService';
            style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px">
 
         <div *ngFor="let rfc of rfcs; let i=index" class="card-mag animate-in" [class]="'delay-'+i" style="cursor:pointer"
-             [routerLink]="['/rfcs', rfc.id]">
+             [routerLink]="['/rfcs', encode(rfc.id)]">
 
           <div style="padding:20px 22px">
             <!-- Header -->
@@ -102,12 +103,12 @@ import { RfcService } from '../../core/services/RFC/RfcService';
 
             <!-- Actions -->
             <div style="display:flex;gap:8px;margin-top:14px">
-              <a [routerLink]="['/rfcs', rfc.id]" class="btn-mag btn-ghost btn-sm" style="flex:1;justify-content:center"
+              <a [routerLink]="['/rfcs', encode(rfc.id)]" class="btn-mag btn-ghost btn-sm" style="flex:1;justify-content:center"
                  (click)="$event.stopPropagation()">
                 <span class="material-icons-round" style="font-size:15px">edit</span>
                 Editar
               </a>
-              <a routerLink="/cfdis/new" [queryParams]="{rfcId: rfc.id}"
+              <a routerLink="/cfdis/new" [queryParams]="{rfcId: encode(rfc.id)}"
                  class="btn-mag btn-outline btn-sm" style="flex:1;justify-content:center"
                  (click)="$event.stopPropagation()">
                 <span class="material-icons-round" style="font-size:15px">receipt_long</span>
@@ -123,6 +124,8 @@ import { RfcService } from '../../core/services/RFC/RfcService';
 export class RfcsComponent implements OnInit {
   rfcs: RfcList[] = [];
   loading = true;
+
+  encode = encodeId;
 
   constructor(private rfcSvc: RfcService) {}
 

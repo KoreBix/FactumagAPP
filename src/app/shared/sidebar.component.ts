@@ -11,7 +11,7 @@ import { WalletService } from '../core/services/wallet/WalletService';
   standalone: true,
   imports: [CommonModule, RouterModule],
   template: `
-    <aside class="sidebar" [class.open]="open">
+    <aside class="sidebar" [class.open]="open" [class.desktop-hidden]="desktopHidden">
 
       <!-- Logo -->
       <div class="sidebar-logo">
@@ -54,7 +54,8 @@ import { WalletService } from '../core/services/wallet/WalletService';
 
         <!-- ══ FACTURACIÓN ════════════════════════════════════════════════ -->
         <!-- Sección visible si el tenant tiene el módulo "facturacion" activo -->
-        <ng-container *ngIf="tieneModulo('facturacion')">
+        <!--<ng-container *ngIf="tieneModulo('facturacion')">-->
+        <ng-container>
           <div class="sidebar-section-title" style="padding-top:12px">Facturación</div>
 
           <!-- Emitir CFDI: permiso emitir_cfdi -->
@@ -114,6 +115,7 @@ import { WalletService } from '../core/services/wallet/WalletService';
 
           <!-- Wallet / Timbres: permiso ver_wallet -->
           <ng-container *ngIf="tienePermiso('ver_wallet')">
+            hola3
             <div class="sidebar-section-title" style="padding-top:12px">Finanzas</div>
             <a class="nav-item"
               routerLink="/wallet"
@@ -124,7 +126,6 @@ import { WalletService } from '../core/services/wallet/WalletService';
             </a>
           </ng-container>
         </ng-container>
-
         <!-- ══ INVENTARIO ══════════════════════════════════════════════════ -->
         <ng-container *ngIf="tienePermiso('ver_productos')">
           <div class="sidebar-section-title" style="padding-top:12px">Inventario</div>
@@ -181,6 +182,7 @@ import { WalletService } from '../core/services/wallet/WalletService';
 })
 export class SidebarComponent implements OnInit {
   @Input()  open = false;
+  @Input()  desktopHidden = false;
   @Output() closed = new EventEmitter<void>();
 
   user: UserProfile | null = null;

@@ -25,7 +25,7 @@ import { WizardOnboardingComponent } from '../features/onboarding/wizard.onboard
     <div class="app-container">
 
       <!-- Sidebar -->
-      <app-sidebar [open]="sidebarOpen" (closed)="sidebarOpen=false" />
+      <app-sidebar [open]="sidebarOpen" [desktopHidden]="!sidebarDesktopVisible" (closed)="sidebarOpen=false" />
 
       <!-- Overlay móvil -->
       <div *ngIf="sidebarOpen"
@@ -33,12 +33,12 @@ import { WizardOnboardingComponent } from '../features/onboarding/wizard.onboard
            (click)="sidebarOpen=false"></div>
 
       <!-- Contenido principal -->
-      <div class="main-content">
+      <div class="main-content" [class.sidebar-hidden]="!sidebarDesktopVisible">
 
         <!-- Topbar -->
         <header class="topbar">
           <div class="topbar-left">
-            <button class="topbar-menu-btn" (click)="sidebarOpen=!sidebarOpen"
+            <button class="topbar-menu-btn" (click)="toggleSidebar()"
                     *ngIf="!isPerfilRoute">
               <span class="material-icons-round">menu</span>
             </button>
@@ -82,7 +82,8 @@ import { WizardOnboardingComponent } from '../features/onboarding/wizard.onboard
   `]
 })
 export class MainLayoutComponent implements OnInit {
-  sidebarOpen   = false;
+  sidebarOpen          = false;
+  sidebarDesktopVisible = true;
   pageTitle     = 'Dashboard';
   showWizard    = false;
   isPerfilRoute = false;
@@ -102,6 +103,14 @@ export class MainLayoutComponent implements OnInit {
     '/nomina/generar': 'Generar Nómina',
     '/nomina/lotes':   'Lotes de Nómina',
   };
+
+  toggleSidebar(): void {
+    if (window.innerWidth > 1024) {
+      this.sidebarDesktopVisible = !this.sidebarDesktopVisible;
+    } else {
+      this.sidebarOpen = !this.sidebarOpen;
+    }
+  }
 
   constructor(private router: Router, private auth: AuthService) {
     this.router.events.pipe(

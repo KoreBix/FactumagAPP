@@ -984,6 +984,12 @@ h1, h2, h3, h4, h5, h6 {
 .mat-mdc-dialog-container { border-radius: var(--radius-lg) !important; }
 .mat-mdc-snack-bar-container { border-radius: var(--radius-md) !important; }
 
+/* ── Desktop sidebar toggle ───────────────────────────────────────────────── */
+@media (min-width: 1025px) {
+  .sidebar.desktop-hidden { transform: translateX(-100%); }
+  .main-content.sidebar-hidden { margin-left: 0; }
+}
+
 /* ── Responsive ───────────────────────────────────────────────────────────── */
 @media (max-width: 1024px) {
   .sidebar { transform: translateX(-100%); }

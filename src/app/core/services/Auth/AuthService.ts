@@ -136,6 +136,8 @@ export class AuthService {
     const permisos = this._user$.value?.tenantPermisos;
     console.log(permisos , "permisos");
     if (!permisos || permisos.length === 0) return true;
+
+    console.log(permisos.includes('*') || permisos.includes(clave));
     return permisos.includes('*') || permisos.includes(clave);
   }
 
