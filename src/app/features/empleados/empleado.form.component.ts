@@ -40,7 +40,7 @@ const ENTIDADES = [
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, RouterModule, FormsModule],
   template: `
-    <div class="animate-in" style="max-width:960px">
+    <div class="animate-in">
       <div style="margin-bottom:24px">
         <a routerLink="/empleados" class="btn-mag btn-ghost btn-sm" style="margin-bottom:16px">
           <span class="material-icons-round" style="font-size:16px">arrow_back</span> Empleados
@@ -200,7 +200,7 @@ const ENTIDADES = [
                          min="0" step="0.01" placeholder="Incluye prestaciones">
                 </div>
               </div>
-              <div style="padding:10px 14px;background:rgba(20,184,166,0.06);border:1px solid rgba(20,184,166,0.2);border-radius:6px;font-size:12px;color:var(--text-muted);margin-top:4px">
+              <div style="padding:10px 14px;background:rgba(59,99,217,0.06);border:1px solid rgba(59,99,217,0.2);border-radius:6px;font-size:12px;color:var(--text-muted);margin-top:4px">
                 <strong>SDI mínimo 2025:</strong> $278.80/día (salario mínimo).
                 SDI = (salario mensual × 12 + aguinaldo + vacaciones + prima vacacional) ÷ 365
               </div>

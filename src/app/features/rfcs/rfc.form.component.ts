@@ -543,8 +543,11 @@ export class RfcFormComponent implements OnInit {
         this.finalizar();
       },
       error: (err) => {
-        this.saving   = false;
-        this.errorMsg = `RFC guardado, pero el logo falló: ${err.error?.error ?? 'error desconocido'}. Puedes subirlo de nuevo editando el RFC.`;
+        this.saving = false;
+        const body = err.error ?? {};
+        const motivo = body.detail || body.error || JSON.stringify(body);
+        this.errorMsg = `Logo falló (HTTP ${err.status}): ${motivo}`;
+        console.error('[RfcForm] subirLogo error completo:', err);
       }
     });
   }

@@ -15,7 +15,7 @@ import { ClienteService } from '../../core/services/cliente/ClienteService';
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, RouterModule],
   template: `
-    <div class="animate-in" style="max-width:680px">
+    <div class="animate-in">
 
       <!-- Header -->
       <div style="margin-bottom:24px">
@@ -151,7 +151,7 @@ import { ClienteService } from '../../core/services/cliente/ClienteService';
             <div class="card-body-mag">
 
               <!-- Traslado IVA -->
-              <div style="background:rgba(20,184,166,.06);border:1px solid rgba(20,184,166,.2);border-radius:10px;padding:14px 16px;margin-bottom:16px">
+              <div style="background:rgba(59,99,217,.06);border:1px solid rgba(59,99,217,.2);border-radius:10px;padding:14px 16px;margin-bottom:16px">
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
                   <span class="material-icons-round" style="font-size:18px;color:var(--accent)">check_circle</span>
                   <span style="font-weight:700;font-size:13px;color:var(--accent)">Traslado IVA</span>

@@ -56,10 +56,18 @@ export class JwtInterceptor implements HttpInterceptor {
 
         if (err.status === 401) {
           const path = window.location.pathname;
-          console.warn(`${LOG} 🔐 401 detectado en "${path}" — se va a hacer logout`);
-          console.warn('Posibles causas: token expirado, token inválido, endpoint requiere auth diferente');
+          const apiPath = err.url ?? '';
+          const errorBody = typeof err.error === 'string' ? err.error : JSON.stringify(err.error);
 
-          if (!path.startsWith('/sso/') && !path.startsWith('/auth/')) {
+          console.warn(`${LOG} 🔐 401 en "${path}" → API: ${apiPath}`);
+          console.warn(`${LOG} Body del 401:`, errorBody);
+
+          // No hacer logout si es un sub-recurso (logo, csd) — puede ser un 401 de negocio
+          const esSubRecurso = /\/api\/Rfc\/\d+\/(logo|csd)/.test(apiPath);
+          if (esSubRecurso) {
+            console.warn(`${LOG} ⏭ Logout omitido — 401 en sub-recurso: ${apiPath}`);
+            console.warn(`${LOG} Motivo recibido del servidor:`, err.error);
+          } else if (!path.startsWith('/sso/') && !path.startsWith('/auth/')) {
             console.warn(`${LOG} 🚪 Ejecutando logout...`);
             this.auth.logout();
           } else {

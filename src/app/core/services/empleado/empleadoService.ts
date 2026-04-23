@@ -31,6 +31,10 @@ export class EmpleadoService {
     return this.http.delete<void>(`${this.base}/${id}`);
   }
 
+  crearMasivo(rfcId: number, empleados: any[]): Observable<{fila: number; nombre: string; exito: boolean; error?: string}[]> {
+    return this.http.post<any[]>(`${this.base}/bulk`, { rfcId, empleados });
+  }
+
   calcularPreview(payload: {
     rfcId: number;
     empleadoIds: number[];

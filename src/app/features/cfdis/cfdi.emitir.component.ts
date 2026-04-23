@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, FormGroup, FormArray, Validators, AbstractControl } from '@angular/forms';
-import { RouterModule, Router } from '@angular/router';
+import { RouterModule, Router, ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { RfcList } from '../../core/models/RFC/RfcList';
@@ -16,10 +16,15 @@ import { REGIMENES_FISCALES } from '../../core/models/CFDI/Catálogos/REGIMENES_
 import { UNIDADES_SAT } from '../../core/models/CFDI/Catálogos/UNIDADES_SAT';
 import { TIPOS_RELACION_CFDI } from '../../core/models/CFDI/Catálogos/TIPOS_RELACION_CFDI';
 import { CfdiService } from '../../core/services/CFDI/CfdiService';
+import { CfdiDetalle } from '../../core/models/CFDI/CfdiDetalle';
 import { RfcService } from '../../core/services/RFC/RfcService';
 import { ClienteService } from '../../core/services/cliente/ClienteService';
 import { SerieService } from '../../core/services/serie/SerieService';
 import { ConceptoCatalogoService } from '../../core/services/conceptoc.atalogo/ConceptoCatalogoService';
+import { PlantillaCfdiService } from '../../core/services/plantilla/PlantillaCfdiService';
+import { PlantillaCfdi } from '../../core/models/plantilla/PlantillaCfdi';
+import { CotizacionService } from '../../core/services/cotizacion/CotizacionService';
+import { Cotizacion } from '../../core/models/cotizacion/Cotizacion';
 
 // ── Catálogos SAT para nómina ─────────────────────────────────────────────────
 const ENTIDADES_FEDERATIVAS = [
@@ -189,937 +194,1188 @@ const PERIODICIDADES_PAGO = [
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, RouterModule, FormsModule],
   template: `
-    <div class="animate-in" style="max-width:960px">
+    <div class="emit-wrap animate-in">
 
-      <div style="margin-bottom:24px">
-        <a routerLink="/cfdis" class="btn-mag btn-ghost btn-sm" style="margin-bottom:16px">
+      <!-- ── Page header ─────────────────────────────────────────── -->
+      <div class="emit-ph">
+        <a routerLink="/cfdis" class="btn-mag btn-ghost btn-sm">
           <span class="material-icons-round" style="font-size:16px">arrow_back</span>
           Mis CFDIs
         </a>
-        <h1 style="font-family:var(--font-display);font-size:22px;font-weight:800">Emitir CFDI</h1>
-        <p style="font-size:14px;color:var(--text-muted);margin-top:4px">Nuevo comprobante fiscal digital versión 4.0</p>
+        <div class="emit-ph-title">
+          <h1>Emitir CFDI</h1>
+          <p>Comprobante Fiscal Digital de Internet · Versión 4.0</p>
+        </div>
       </div>
 
       <form [formGroup]="form" (ngSubmit)="submit()">
-        <div style="display:flex;flex-direction:column;gap:20px">
 
-          <!-- ══ 1: Configuración general ══ -->
-          <div class="card-mag animate-in delay-1">
-            <div class="card-header-mag">
+        <!-- ── Cargando datos base ── -->
+        <div *ngIf="cargandoBase" class="base-loading">
+          <span class="material-icons-round spin-anim" style="font-size:20px">refresh</span>
+          Cargando datos del CFDI original...
+        </div>
+
+        <!-- ── Banner modo clon ── -->
+        <div *ngIf="modoClonando && !cargandoBase" class="modo-banner modo-clone">
+          <span class="material-icons-round" style="font-size:18px">content_copy</span>
+          <div>
+            <div style="font-weight:700;font-size:13px">Duplicando CFDI</div>
+            <div style="font-size:12px;opacity:.8">Formulario pre-llenado con los datos del comprobante original. Revisa y ajusta antes de timbrar.</div>
+          </div>
+        </div>
+
+        <!-- ── Banner modo edición ── -->
+        <div *ngIf="modoEditando && !cargandoBase" class="modo-banner modo-edit">
+          <span class="material-icons-round" style="font-size:18px">edit</span>
+          <div>
+            <div style="font-weight:700;font-size:13px">Editando borrador</div>
+            <div style="font-size:12px;opacity:.8">Se generará un nuevo CFDI con los datos corregidos. El borrador original no se modifica.</div>
+          </div>
+        </div>
+
+        <!-- ── Banner cotización convertida ── -->
+        <div *ngIf="cotizacionCargada" class="modo-banner" style="background:rgba(59,130,246,.07);border-color:rgba(59,130,246,.25);color:#3b82f6">
+          <span class="material-icons-round" style="font-size:18px">request_quote</span>
+          <div style="flex:1">
+            <div style="font-weight:700;font-size:13px">Convirtiendo cotización {{ cotizacionCargada.folio }}</div>
+            <div style="font-size:12px;opacity:.8">Receptor y conceptos pre-llenados. Completa RFC emisor, forma de pago y timbra.</div>
+          </div>
+          <a [routerLink]="['/cotizaciones', cotizacionCargada.id]" class="btn-mag btn-ghost btn-sm">Ver cotización</a>
+        </div>
+
+        <!-- ── Banner plantilla cargada ── -->
+        <div *ngIf="plantillaCargada" class="modo-banner" style="background:rgba(0,212,170,.07);border-color:rgba(0,212,170,.25);color:var(--accent)">
+          <span class="material-icons-round" style="font-size:18px">bookmark</span>
+          <div style="flex:1">
+            <div style="font-weight:700;font-size:13px">Plantilla: {{ plantillaCargada.nombre }}</div>
+            <div style="font-size:12px;opacity:.8">Formulario pre-llenado desde tu plantilla frecuente. Revisa y timbra.</div>
+          </div>
+          <a routerLink="/plantillas-cfdi" class="btn-mag btn-ghost btn-sm">Ver plantillas</a>
+        </div>
+
+        <div class="emit-sections">
+
+          <!-- ══ 1: Configuración general ══════════════════════════════ -->
+          <div class="emit-card animate-in delay-1">
+            <div class="emit-card-hdr">
+              <div class="emit-sec-num">1</div>
               <div>
-                <div class="card-title">1. Configuración general</div>
-                <div class="card-subtitle">RFC emisor y tipo de comprobante</div>
+                <div class="emit-sec-title">Configuración general</div>
+                <div class="emit-sec-sub">RFC emisor, tipo de comprobante y condiciones de pago</div>
               </div>
-              <div *ngIf="rfcSeleccionado" style="text-align:right">
-                <div style="font-size:11px;color:var(--text-muted)">Timbres disponibles</div>
-                <div style="font-family:var(--font-display);font-size:18px;font-weight:800;color:var(--accent)">
-                  {{ rfcSeleccionado.saldoTimbres }}
+              <div *ngIf="rfcSeleccionado" class="emit-badge-timbres">
+                <span class="material-icons-round" style="font-size:15px">confirmation_number</span>
+                <div>
+                  <div style="font-size:10px;opacity:.7;text-transform:uppercase;letter-spacing:.05em">Timbres</div>
+                  <div style="font-size:20px;font-weight:900;font-family:var(--font-display);line-height:1">{{ rfcSeleccionado.saldoTimbres }}</div>
                 </div>
               </div>
             </div>
-            <div class="card-body-mag">
-              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 20px" class="form-mag">
 
-                <div class="form-group" style="grid-column:1/3">
-                  <label>RFC Emisor *</label>
+            <div class="emit-card-body">
+
+              <!-- RFC Emisor -->
+              <div class="fg" style="grid-column:1/-1;margin-bottom:20px">
+                <label class="fl fl-req">RFC Emisor</label>
+                <div class="sel-wrap">
                   <select formControlName="rfcId" class="form-control-mag"
                           [class.error-field]="hasError('rfcId')" (change)="onRfcChange()">
-                    <option value="">Seleccionar RFC...</option>
+                    <option value="">— Seleccionar RFC emisor —</option>
                     <option *ngFor="let r of rfcs" [value]="r.id">{{ r.rfc }} — {{ r.razonSocial }}</option>
                   </select>
-                  <div class="field-error" *ngIf="hasError('rfcId')">Selecciona un RFC</div>
-                  <div *ngIf="rfcSeleccionado && !rfcSeleccionado.csdActivo"
-                       style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:6px;padding:8px 12px;font-size:12px;color:var(--warning);margin-top:6px;display:flex;gap:6px;align-items:center">
-                    <span class="material-icons-round" style="font-size:15px">warning_amber</span>
-                    Este RFC no tiene CSD activo. No podrá timbrar.
+                  <span class="material-icons-round sel-ico">expand_more</span>
+                </div>
+                <div class="field-error" *ngIf="hasError('rfcId')">Selecciona un RFC</div>
+                <div *ngIf="rfcSeleccionado && !rfcSeleccionado.csdActivo" class="field-warn">
+                  <span class="material-icons-round" style="font-size:14px">warning_amber</span>
+                  Este RFC no tiene CSD activo — no podrá timbrar.
+                </div>
+              </div>
+
+              <!-- Tipo de comprobante: tiles -->
+              <div class="fg" style="margin-bottom:20px">
+                <label class="fl">Tipo de comprobante</label>
+                <div class="tipo-tiles">
+                  <div *ngFor="let t of tipos" class="tipo-tile"
+                       [class.active]="tipoActual === t.value"
+                       [attr.data-tipo]="t.value"
+                       (click)="form.get('tipoComprobante')!.setValue(t.value)">
+                    <span class="tipo-tile-code">{{ t.value }}</span>
+                    <span class="tipo-tile-name">{{ t.label.includes('—') ? t.label.split('—')[1].trim() : t.label }}</span>
                   </div>
                 </div>
-
-                <div class="form-group">
-                  <label>Tipo de comprobante *</label>
-                  <select formControlName="tipoComprobante" class="form-control-mag">
-                    <option value="">Seleccionar...</option>
-                    <option *ngFor="let t of tipos" [value]="t.value">{{ t.label }}</option>
-                  </select>
-                  <div *ngIf="tipoActual === 'T'"
-                       style="margin-top:6px;padding:6px 10px;background:rgba(37,99,235,0.08);border:1px solid rgba(37,99,235,0.2);border-radius:6px;font-size:11px;color:#2563eb;display:flex;gap:5px;align-items:center">
-                    <span class="material-icons-round" style="font-size:13px">info</span>
-                    Traslado: sin forma/método de pago
-                  </div>
-                  <div *ngIf="tipoActual === 'P'"
-                       style="margin-top:6px;padding:6px 10px;background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:6px;font-size:11px;color:#7c3aed;display:flex;gap:5px;align-items:center">
-                    <span class="material-icons-round" style="font-size:13px">info</span>
-                    Complemento de pago: llena la sección 3
-                  </div>
-                  <div *ngIf="tipoActual === 'N'"
-                       style="margin-top:6px;padding:6px 10px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:6px;font-size:11px;color:#10b981;display:flex;gap:5px;align-items:center">
-                    <span class="material-icons-round" style="font-size:13px">info</span>
-                    Nómina: usa complemento de nómina
-                  </div>
+                <div *ngIf="tipoActual === 'T'" class="tipo-hint hint-blue">
+                  <span class="material-icons-round" style="font-size:14px">info</span>
+                  Traslado: forma y método de pago no aplican
                 </div>
+                <div *ngIf="tipoActual === 'P'" class="tipo-hint hint-purple">
+                  <span class="material-icons-round" style="font-size:14px">info</span>
+                  Complemento de pago: completa la sección 3 con los datos del pago recibido
+                </div>
+                <div *ngIf="tipoActual === 'N'" class="tipo-hint hint-green">
+                  <span class="material-icons-round" style="font-size:14px">info</span>
+                  Nómina: completa las secciones 3–7 con los datos del empleado y período
+                </div>
+              </div>
 
-                <div class="form-group">
-                  <label>Serie
-                    <span *ngIf="!rfcSeleccionado" style="font-size:11px;color:var(--text-muted);font-weight:400"> (selecciona un RFC)</span>
+              <!-- Fila: Serie · Forma pago · Método pago · Moneda · CP -->
+              <div class="emit-grid-5">
+
+                <div class="fg">
+                  <label class="fl">
+                    Serie
+                    <span *ngIf="!rfcSeleccionado" class="fl-hint"> (selecciona RFC primero)</span>
                   </label>
-                  <div style="display:flex;gap:8px">
-                    <div style="flex:1">
-                      <input type="text" formControlName="serie" class="form-control-mag"
-                             placeholder="Sin serie o escribe una letra..."
-                             maxlength="10" style="text-transform:uppercase" list="series-list">
-                      <datalist id="series-list">
-                        <option value="">Sin serie</option>
-                        <option *ngFor="let s of series" [value]="s.codigo">
-                          {{ s.codigo }}{{ s.descripcion ? ' — ' + s.descripcion : '' }}
-                        </option>
-                      </datalist>
-                    </div>
+                  <div style="display:flex;gap:6px">
+                    <input type="text" formControlName="serie" class="form-control-mag"
+                           placeholder="Ej. A" maxlength="10"
+                           style="text-transform:uppercase;flex:1;min-width:0"
+                           list="series-list">
+                    <datalist id="series-list">
+                      <option value="">Sin serie</option>
+                      <option *ngFor="let s of series" [value]="s.codigo">
+                        {{ s.codigo }}{{ s.descripcion ? ' — ' + s.descripcion : '' }}
+                      </option>
+                    </datalist>
                     <button type="button" class="btn-mag btn-outline btn-sm"
+                            style="padding:0 10px;flex-shrink:0"
                             (click)="guardarSerieLibre()"
-                            *ngIf="rfcSeleccionado && serieEsNueva()" style="padding:0 10px;flex-shrink:0">
+                            *ngIf="rfcSeleccionado && serieEsNueva()"
+                            title="Guardar como nueva serie">
                       <span class="material-icons-round" style="font-size:15px">save</span>
                     </button>
                   </div>
                 </div>
 
-                <div class="form-group" *ngIf="tipoActual !== 'T' && tipoActual !== 'P'">
-                  <label>Forma de pago *</label>
-                  <select formControlName="formaPago" class="form-control-mag">
-                    <option value="">Seleccionar...</option>
-                    <option *ngFor="let f of formasPago" [value]="f.value">{{ f.label }}</option>
-                  </select>
+                <div class="fg" *ngIf="tipoActual !== 'T' && tipoActual !== 'N'">
+                  <label class="fl fl-req">
+                    {{ tipoActual === 'P' ? 'Forma de pago (complemento)' : 'Forma de pago' }}
+                  </label>
+                  <div class="sel-wrap">
+                    <select formControlName="formaPago" class="form-control-mag">
+                      <option value="">Seleccionar...</option>
+                      <option *ngFor="let f of formasPago" [value]="f.value">{{ f.label }}</option>
+                    </select>
+                    <span class="material-icons-round sel-ico">expand_more</span>
+                  </div>
                 </div>
 
-                <!-- Para tipo P: forma de pago del complemento (visible pero informativo) -->
-                <div class="form-group" *ngIf="tipoActual === 'P'">
-                  <label>Forma de pago del complemento *</label>
-                  <select formControlName="formaPago" class="form-control-mag">
-                    <option value="">Seleccionar...</option>
-                    <option *ngFor="let f of formasPago" [value]="f.value">{{ f.label }}</option>
-                  </select>
+                <div class="fg" *ngIf="tipoActual === 'I' || tipoActual === 'E' || tipoActual === 'N'">
+                  <label class="fl fl-req">Método de pago</label>
+                  <div class="sel-wrap">
+                    <select formControlName="metodoPago" class="form-control-mag">
+                      <option value="">Seleccionar...</option>
+                      <option *ngFor="let m of metodosPago" [value]="m.value">{{ m.label }}</option>
+                    </select>
+                    <span class="material-icons-round sel-ico">expand_more</span>
+                  </div>
                 </div>
 
-                <div class="form-group" *ngIf="tipoActual === 'I' || tipoActual === 'E' || tipoActual === 'N'">
-                  <label>Método de pago *</label>
-                  <select formControlName="metodoPago" class="form-control-mag">
-                    <option value="">Seleccionar...</option>
-                    <option *ngFor="let m of metodosPago" [value]="m.value">{{ m.label }}</option>
-                  </select>
+                <div class="fg">
+                  <label class="fl">Moneda</label>
+                  <div class="sel-wrap">
+                    <select formControlName="moneda" class="form-control-mag">
+                      <option value="MXN">MXN — Peso Mexicano</option>
+                      <option value="USD">USD — Dólar</option>
+                      <option value="EUR">EUR — Euro</option>
+                    </select>
+                    <span class="material-icons-round sel-ico">expand_more</span>
+                  </div>
                 </div>
 
-                <div class="form-group">
-                  <label>Moneda</label>
-                  <select formControlName="moneda" class="form-control-mag">
-                    <option value="MXN">MXN — Peso Mexicano</option>
-                    <option value="USD">USD — Dólar</option>
-                    <option value="EUR">EUR — Euro</option>
-                  </select>
-                </div>
-
-                <div class="form-group">
-                  <label>Lugar de expedición (CP) *</label>
-                  <input type="text" formControlName="lugarExpedicion" class="form-control-mag"
-                         placeholder="06600" maxlength="5"
-                         [readonly]="!!rfcSeleccionado"
-                         [style.background]="rfcSeleccionado ? 'var(--bg-card2)' : ''"
-                         [style.color]="rfcSeleccionado ? 'var(--text-muted)' : ''">
+                <div class="fg">
+                  <label class="fl fl-req">CP Expedición</label>
+                  <div class="input-wrap">
+                    <span class="material-icons-round input-ico-l">location_on</span>
+                    <input type="text" formControlName="lugarExpedicion" class="form-control-mag fld-icon-l"
+                           placeholder="06600" maxlength="5"
+                           [readonly]="!!rfcSeleccionado"
+                           [class.fld-readonly]="!!rfcSeleccionado">
+                  </div>
+                  <div class="fl-hint" *ngIf="rfcSeleccionado">Tomado del RFC emisor</div>
                 </div>
 
               </div>
             </div>
           </div>
 
-          <!-- ══ 2: Receptor ══ -->
-          <div class="card-mag animate-in delay-2">
-            <div class="card-header-mag">
+          <!-- ══ 2: Receptor ══════════════════════════════════════════ -->
+          <div class="emit-card animate-in delay-2">
+            <div class="emit-card-hdr">
+              <div class="emit-sec-num">2</div>
               <div>
-                <div class="card-title">2. Receptor</div>
-                <div class="card-subtitle">Datos del cliente / trabajador</div>
+                <div class="emit-sec-title">Receptor</div>
+                <div class="emit-sec-sub">Datos fiscales del cliente o trabajador</div>
               </div>
             </div>
-            <div class="card-body-mag">
-              <div style="margin-bottom:16px">
-                <div style="display:flex;gap:10px;align-items:flex-end">
-                  <div style="flex:1">
-                    <label>Seleccionar cliente</label>
+            <div class="emit-card-body">
+
+              <!-- Client picker -->
+              <div class="receptor-picker-row">
+                <div style="flex:1;min-width:0">
+                  <label class="fl" style="display:block;margin-bottom:6px">Buscar en mis clientes</label>
+                  <div class="sel-wrap">
                     <select class="form-control-mag" (change)="onClienteSelect($event)">
-                      <option value="">— Buscar en mis clientes —</option>
+                      <option value="">— Seleccionar cliente guardado —</option>
                       <option *ngFor="let c of clientes" [value]="c.id">{{ c.rfc }} — {{ c.nombre }}</option>
                     </select>
+                    <span class="material-icons-round sel-ico">expand_more</span>
                   </div>
-                  <button type="button" class="btn-mag btn-outline btn-sm"
-                          (click)="mostrarAgregarCliente = !mostrarAgregarCliente" style="white-space:nowrap">
-                    <span class="material-icons-round" style="font-size:15px">person_add</span> Nuevo
-                  </button>
                 </div>
+                <button type="button" class="btn-mag btn-outline"
+                        style="white-space:nowrap;flex-shrink:0;align-self:flex-end"
+                        (click)="mostrarAgregarCliente = !mostrarAgregarCliente">
+                  <span class="material-icons-round" style="font-size:16px">person_add</span>
+                  Nuevo cliente
+                </button>
+              </div>
 
-                <div *ngIf="mostrarAgregarCliente"
-                     style="margin-top:12px;padding:14px;background:var(--bg-card2);border-radius:8px;border:1px solid var(--border-light)">
-                  <div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px">Nuevo cliente</div>
-                  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 16px" class="form-mag">
-                    <div class="form-group">
-                      <label>RFC *</label>
-                      <input [(ngModel)]="nuevoCliente.rfc" [ngModelOptions]="{standalone:true}"
-                             class="form-control-mag" placeholder="XAXX010101000" maxlength="13"
-                             style="font-family:monospace;font-weight:700">
-                    </div>
-                    <div class="form-group" style="grid-column:span 2">
-                      <label>Nombre / Razón Social *</label>
-                      <input [(ngModel)]="nuevoCliente.nombre" [ngModelOptions]="{standalone:true}"
-                             class="form-control-mag" placeholder="NOMBRE DEL CLIENTE">
-                    </div>
-                    <div class="form-group">
-                      <label>Uso CFDI</label>
+              <!-- Selected client chip -->
+              <div *ngIf="clienteSeleccionado" class="cliente-chip">
+                <div class="cliente-chip-avatar">{{ clienteSeleccionado.nombre.charAt(0) }}</div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-weight:700;font-size:14px">{{ clienteSeleccionado.nombre }}</div>
+                  <div style="font-size:11px;color:var(--text-muted);font-family:monospace">{{ clienteSeleccionado.rfc }}</div>
+                </div>
+                <span class="material-icons-round" style="font-size:18px;color:var(--accent);flex-shrink:0">verified</span>
+                <button type="button" class="btn-mag btn-ghost btn-sm" (click)="limpiarReceptor()"
+                        style="padding:4px;flex-shrink:0" title="Cambiar receptor">
+                  <span class="material-icons-round" style="font-size:16px">close</span>
+                </button>
+              </div>
+
+              <!-- New client panel -->
+              <div *ngIf="mostrarAgregarCliente" class="nuevo-cliente-panel">
+                <div class="subsec-label">
+                  <span class="material-icons-round" style="font-size:15px">person_add</span>
+                  Nuevo cliente
+                </div>
+                <div class="emit-grid-3">
+                  <div class="fg">
+                    <label class="fl fl-req">RFC</label>
+                    <input [(ngModel)]="nuevoCliente.rfc" [ngModelOptions]="{standalone:true}"
+                           class="form-control-mag fld-mono"
+                           placeholder="XAXX010101000" maxlength="13">
+                  </div>
+                  <div class="fg" style="grid-column:span 2">
+                    <label class="fl fl-req">Nombre / Razón Social</label>
+                    <input [(ngModel)]="nuevoCliente.nombre" [ngModelOptions]="{standalone:true}"
+                           class="form-control-mag" placeholder="NOMBRE DEL CLIENTE">
+                  </div>
+                  <div class="fg">
+                    <label class="fl">Uso CFDI</label>
+                    <div class="sel-wrap">
                       <select [(ngModel)]="nuevoCliente.usoCfdi" [ngModelOptions]="{standalone:true}" class="form-control-mag">
                         <option *ngFor="let u of usosCfdi" [value]="u.value">{{ u.label }}</option>
                       </select>
+                      <span class="material-icons-round sel-ico">expand_more</span>
                     </div>
-                    <div class="form-group">
-                      <label>Régimen Fiscal</label>
+                  </div>
+                  <div class="fg">
+                    <label class="fl">Régimen Fiscal</label>
+                    <div class="sel-wrap">
                       <select [(ngModel)]="nuevoCliente.regimenFiscal" [ngModelOptions]="{standalone:true}" class="form-control-mag">
                         <option *ngFor="let r of regimenes" [value]="r.value">{{ r.label }}</option>
                       </select>
-                    </div>
-                    <div class="form-group">
-                      <label>CP</label>
-                      <input [(ngModel)]="nuevoCliente.codigoPostal" [ngModelOptions]="{standalone:true}"
-                             class="form-control-mag" placeholder="06600" maxlength="5">
+                      <span class="material-icons-round sel-ico">expand_more</span>
                     </div>
                   </div>
-                  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
-                    <button type="button" class="btn-mag btn-ghost btn-sm" (click)="mostrarAgregarCliente=false">Cancelar</button>
-                    <button type="button" class="btn-mag btn-primary btn-sm" (click)="guardarCliente()">
-                      <span class="material-icons-round" style="font-size:15px">save</span> Guardar
-                    </button>
+                  <div class="fg">
+                    <label class="fl">Código Postal</label>
+                    <input [(ngModel)]="nuevoCliente.codigoPostal" [ngModelOptions]="{standalone:true}"
+                           class="form-control-mag" placeholder="06600" maxlength="5">
                   </div>
                 </div>
-
-                <div *ngIf="clienteSeleccionado"
-                     style="margin-top:10px;padding:10px 14px;background:rgba(20,184,166,0.06);border:1px solid rgba(20,184,166,0.2);border-radius:6px;display:flex;align-items:center;gap:10px">
-                  <span class="material-icons-round" style="font-size:18px;color:var(--accent)">check_circle</span>
-                  <div style="flex:1">
-                    <div style="font-weight:700;font-size:13px">{{ clienteSeleccionado.nombre }}</div>
-                    <div style="font-size:11px;color:var(--text-muted);font-family:monospace">{{ clienteSeleccionado.rfc }}</div>
-                  </div>
-                  <button type="button" class="btn-mag btn-ghost btn-sm" (click)="limpiarReceptor()" style="padding:4px 8px">
-                    <span class="material-icons-round" style="font-size:14px">close</span>
+                <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+                  <button type="button" class="btn-mag btn-ghost btn-sm" (click)="mostrarAgregarCliente=false">Cancelar</button>
+                  <button type="button" class="btn-mag btn-primary btn-sm" (click)="guardarCliente()">
+                    <span class="material-icons-round" style="font-size:15px">save</span> Guardar cliente
                   </button>
                 </div>
               </div>
 
-              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 20px" class="form-mag">
-                <div class="form-group">
-                  <label>RFC Receptor *</label>
-                  <input type="text" formControlName="receptorRfc" class="form-control-mag"
+              <!-- Divider -->
+              <div class="receptor-divider"><span>Datos fiscales del receptor</span></div>
+
+              <!-- Receptor fields -->
+              <div class="emit-grid-3">
+                <div class="fg">
+                  <label class="fl fl-req">RFC Receptor</label>
+                  <input type="text" formControlName="receptorRfc" class="form-control-mag fld-mono"
                          [class.error-field]="hasError('receptorRfc')"
-                         placeholder="XAXX010101000" maxlength="13"
-                         style="font-family:monospace;font-weight:700;letter-spacing:1px">
+                         placeholder="XAXX010101000" maxlength="13">
                   <div class="field-error" *ngIf="hasError('receptorRfc')">Campo requerido</div>
                 </div>
-                <div class="form-group" style="grid-column:span 2">
-                  <label>Nombre / Razón Social *</label>
+                <div class="fg" style="grid-column:span 2">
+                  <label class="fl fl-req">Nombre / Razón Social</label>
                   <input type="text" formControlName="receptorNombre" class="form-control-mag"
                          [class.error-field]="hasError('receptorNombre')" placeholder="PUBLICO EN GENERAL">
+                  <div class="field-error" *ngIf="hasError('receptorNombre')">Campo requerido</div>
                 </div>
-                <div class="form-group">
-                  <label>Uso CFDI *</label>
-                  <select formControlName="usoCfdi" class="form-control-mag">
-                    <option value="">Seleccionar...</option>
-                    <option *ngFor="let u of usosCfdi" [value]="u.value">{{ u.label }}</option>
-                  </select>
+                <div class="fg">
+                  <label class="fl fl-req">Uso CFDI</label>
+                  <div class="sel-wrap">
+                    <select formControlName="usoCfdi" class="form-control-mag">
+                      <option value="">Seleccionar...</option>
+                      <option *ngFor="let u of usosCfdi" [value]="u.value">{{ u.label }}</option>
+                    </select>
+                    <span class="material-icons-round sel-ico">expand_more</span>
+                  </div>
                   <div *ngIf="tipoActual === 'T' || tipoActual === 'P' || tipoActual === 'N'"
-                       style="font-size:11px;color:#2563eb;margin-top:3px;display:flex;gap:4px;align-items:center">
-                    <span class="material-icons-round" style="font-size:12px">lock</span>
+                       class="fl-hint fl-hint-lock">
+                    <span class="material-icons-round" style="font-size:11px">lock</span>
                     Fijado por tipo de comprobante
                   </div>
                 </div>
-                <div class="form-group">
-                  <label>Uso CFDI Receptor</label>
-                  <select formControlName="receptorUsoCfdi" class="form-control-mag">
-                    <option value="">Seleccionar...</option>
-                    <option *ngFor="let u of usosCfdi" [value]="u.value">{{ u.label }}</option>
-                  </select>
+                <div class="fg">
+                  <label class="fl">Uso CFDI Receptor</label>
+                  <div class="sel-wrap">
+                    <select formControlName="receptorUsoCfdi" class="form-control-mag">
+                      <option value="">Seleccionar...</option>
+                      <option *ngFor="let u of usosCfdi" [value]="u.value">{{ u.label }}</option>
+                    </select>
+                    <span class="material-icons-round sel-ico">expand_more</span>
+                  </div>
                 </div>
-                <div class="form-group">
-                  <label>Régimen Fiscal Receptor *</label>
-                  <select formControlName="receptorRegimen" class="form-control-mag">
-                    <option value="">Seleccionar...</option>
-                    <option *ngFor="let r of regimenes" [value]="r.value">{{ r.label }}</option>
-                  </select>
+                <div class="fg">
+                  <label class="fl fl-req">Régimen Fiscal Receptor</label>
+                  <div class="sel-wrap">
+                    <select formControlName="receptorRegimen" class="form-control-mag">
+                      <option value="">Seleccionar...</option>
+                      <option *ngFor="let r of regimenes" [value]="r.value">{{ r.label }}</option>
+                    </select>
+                    <span class="material-icons-round sel-ico">expand_more</span>
+                  </div>
                 </div>
-                <div class="form-group">
-                  <label>CP Receptor *</label>
-                  <input type="text" formControlName="receptorCp" class="form-control-mag" placeholder="06600" maxlength="5">
+                <div class="fg">
+                  <label class="fl fl-req">CP Receptor</label>
+                  <input type="text" formControlName="receptorCp" class="form-control-mag"
+                         placeholder="06600" maxlength="5">
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- ══ 3: Conceptos — solo I/E/T ══ -->
-          <div class="card-mag animate-in delay-3" *ngIf="tipoActual !== 'N' && tipoActual !== 'P'">
-            <div class="card-header-mag">
+          <!-- ══ 3: Conceptos (I/E/T) ═════════════════════════════════ -->
+          <div class="emit-card animate-in delay-3" *ngIf="tipoActual !== 'N' && tipoActual !== 'P'">
+            <div class="emit-card-hdr">
+              <div class="emit-sec-num">3</div>
               <div>
-                <div class="card-title">3. Conceptos</div>
-                <div class="card-subtitle">Productos o servicios a facturar</div>
+                <div class="emit-sec-title">Conceptos</div>
+                <div class="emit-sec-sub">Productos o servicios a facturar</div>
               </div>
-              <div style="display:flex;align-items:center;gap:10px">
-                <div style="text-align:right">
-                  <div style="font-size:11px;color:var(--text-muted)">Total</div>
-                  <div style="font-family:var(--font-display);font-size:20px;font-weight:800;color:var(--text-primary)">
-                    {{ total | currency:'MXN':'symbol-narrow':'1.2-2' }}
-                  </div>
-                </div>
-                <button type="button" class="btn-mag btn-outline btn-sm"
+              <div class="emit-card-hdr-actions">
+                <button type="button" class="btn-mag btn-ghost btn-sm"
                         (click)="mostrarCatalogoConceptos = !mostrarCatalogoConceptos">
                   <span class="material-icons-round" style="font-size:16px">inventory_2</span> Catálogo
                 </button>
-                <button type="button" class="btn-mag btn-outline btn-sm" (click)="addConcepto()">
+                <button type="button" class="btn-mag btn-primary btn-sm" (click)="addConcepto()">
                   <span class="material-icons-round" style="font-size:16px">add</span> Agregar
                 </button>
               </div>
             </div>
 
-            <div *ngIf="mostrarCatalogoConceptos"
-                 style="padding:12px 20px;background:var(--bg-card2);border-bottom:1px solid var(--border-light)">
+            <div *ngIf="mostrarCatalogoConceptos" class="catalogo-conceptos">
               <div style="display:flex;flex-wrap:wrap;gap:8px" *ngIf="conceptosCatalogo.length > 0">
                 <button *ngFor="let cc of conceptosCatalogo" type="button"
-                        class="btn-mag btn-ghost btn-sm" style="font-size:12px"
+                        class="btn-mag btn-ghost btn-sm catalogo-chip"
                         (click)="addConceptoDesde(cc)">
-                  <span class="material-icons-round" style="font-size:13px">add_circle</span>
+                  <span class="material-icons-round" style="font-size:13px">add_circle_outline</span>
                   {{ cc.descripcion }}
-                  <span style="color:var(--text-muted);margin-left:4px">{{ cc.precioUnitario | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+                  <span class="catalogo-chip-price">{{ cc.precioUnitario | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
                 </button>
               </div>
-              <div *ngIf="conceptosCatalogo.length === 0" style="font-size:13px;color:var(--text-muted)">
-                No tienes conceptos guardados.
+              <div *ngIf="conceptosCatalogo.length === 0" class="empty-state-sm" style="padding:12px 0">
+                Sin conceptos guardados en el catálogo
               </div>
             </div>
 
-            <div class="card-body-mag" style="padding:0" formArrayName="conceptos">
+            <div formArrayName="conceptos">
               <div *ngFor="let c of conceptos.controls; let i=index"
-                   [formGroupName]="i"
-                   style="padding:16px 20px;border-bottom:1px solid var(--border-light)">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-                  <span style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Concepto {{ i+1 }}</span>
-                  <div style="display:flex;gap:6px">
-                    <button type="button" class="btn-mag btn-ghost btn-sm" (click)="guardarEnCatalogo(c)" style="padding:4px 8px">
-                      <span class="material-icons-round" style="font-size:13px">bookmark_add</span>
+                   [formGroupName]="i" class="concepto-row">
+                <div class="concepto-row-hdr">
+                  <div class="concepto-num">
+                    <span class="material-icons-round" style="font-size:14px">receipt_long</span>
+                    Concepto {{ i + 1 }}
+                  </div>
+                  <div style="display:flex;gap:6px;align-items:center">
+                    <div class="concepto-importe-badge">
+                      {{ importeConcepto(c) | currency:'MXN':'symbol-narrow':'1.2-2' }}
+                    </div>
+                    <button type="button" class="btn-mag btn-ghost btn-sm"
+                            style="padding:4px 8px" (click)="guardarEnCatalogo(c)" title="Guardar en catálogo">
+                      <span class="material-icons-round" style="font-size:14px">bookmark_add</span>
                     </button>
                     <button type="button" class="btn-mag btn-danger btn-sm"
+                            style="padding:4px 8px"
                             (click)="removeConcepto(i)" *ngIf="conceptos.length > 1">
                       <span class="material-icons-round" style="font-size:14px">delete</span>
                     </button>
                   </div>
                 </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0 16px" class="form-mag">
-                  <div class="form-group" style="grid-column:1/-1">
-                    <label>Descripción *</label>
+
+                <div class="concepto-fields">
+                  <div class="fg" style="grid-column:1/-1">
+                    <label class="fl fl-req">Descripción del producto / servicio</label>
                     <input type="text" formControlName="descripcion" class="form-control-mag"
-                           placeholder="Descripción del producto/servicio"
+                           placeholder="Ej. Servicio de consultoría tecnológica"
                            [attr.list]="'conceptos-list-' + i"
                            (change)="onDescripcionSelect(c, $event)">
                     <datalist [id]="'conceptos-list-' + i">
                       <option *ngFor="let cc of conceptosCatalogo" [value]="cc.descripcion"></option>
                     </datalist>
                   </div>
-                  <div class="form-group">
-                    <label>Clave Prod/Serv *</label>
-                    <input type="text" formControlName="claveProdServ" class="form-control-mag"
-                           placeholder="Clave SAT" [attr.list]="'claves-list-' + i">
+                  <div class="fg">
+                    <label class="fl fl-req">Clave SAT</label>
+                    <input type="text" formControlName="claveProdServ" class="form-control-mag fld-mono"
+                           placeholder="01010101" [attr.list]="'claves-list-' + i">
                     <datalist [id]="'claves-list-' + i">
                       <option *ngFor="let cc of conceptosCatalogo" [value]="cc.claveProdServ">{{ cc.descripcion }}</option>
                     </datalist>
                   </div>
-                  <div class="form-group">
-                    <label>Unidad *</label>
-                    <select formControlName="claveUnidad" class="form-control-mag" (change)="onUnidadChange(c, $event)">
-                      <option value="">Seleccionar...</option>
-                      <option *ngFor="let u of unidades" [value]="u.value">{{ u.label }}</option>
-                    </select>
-                  </div>
-                  <div class="form-group">
-                    <label>IVA %</label>
-                    <select formControlName="tasaIva" class="form-control-mag" (change)="calcTotal()">
-                      <option [value]="0.16">16%</option>
-                      <option [value]="0.08">8%</option>
-                      <option [value]="0">0%</option>
-                    </select>
-                  </div>
-                  <div class="form-group">
-                    <label>Cantidad *</label>
-                    <input type="number" formControlName="cantidad" class="form-control-mag" min="0.001" step="0.001" (input)="calcTotal()">
-                  </div>
-                  <div class="form-group">
-                    <label>Precio unitario *</label>
-                    <input type="number" formControlName="precioUnitario" class="form-control-mag" min="0.01" step="0.01" (input)="calcTotal()">
-                  </div>
-                  <div class="form-group">
-                    <label>Descuento</label>
-                    <input type="number" formControlName="descuento" class="form-control-mag" min="0" step="0.01" (input)="calcTotal()">
-                  </div>
-                  <div class="form-group">
-                    <label>Importe</label>
-                    <div style="padding:11px 14px;background:var(--bg-card2);border:1.5px solid var(--border-light);border-radius:var(--radius-sm);font-family:var(--font-display);font-weight:700;font-size:14px">
-                      {{ importeConcepto(c) | currency:'MXN':'symbol-narrow':'1.2-2' }}
+                  <div class="fg">
+                    <label class="fl fl-req">Unidad</label>
+                    <div class="sel-wrap">
+                      <select formControlName="claveUnidad" class="form-control-mag"
+                              (change)="onUnidadChange(c, $event)">
+                        <option value="">Seleccionar...</option>
+                        <option *ngFor="let u of unidades" [value]="u.value">{{ u.label }}</option>
+                      </select>
+                      <span class="material-icons-round sel-ico">expand_more</span>
                     </div>
                   </div>
-                </div>
-              </div>
-              <div style="padding:16px 20px;background:var(--bg-card2);border-top:2px solid var(--border-light)">
-                <div style="display:flex;justify-content:flex-end">
-                  <div style="width:280px">
-                    <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;color:var(--text-secondary)">
-                      <span>Subtotal</span><span>{{ subtotal | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+                  <div class="fg">
+                    <label class="fl">IVA %</label>
+                    <div class="sel-wrap">
+                      <select formControlName="tasaIva" class="form-control-mag" (change)="calcTotal()">
+                        <option [value]="0.16">16%</option>
+                        <option [value]="0.08">8%</option>
+                        <option [value]="0">0% — Exento</option>
+                      </select>
+                      <span class="material-icons-round sel-ico">expand_more</span>
                     </div>
-                    <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;color:var(--text-secondary)">
-                      <span>IVA</span><span>{{ iva | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+                  </div>
+                  <div class="fg">
+                    <label class="fl fl-req">Cantidad</label>
+                    <input type="number" formControlName="cantidad" class="form-control-mag"
+                           min="0.001" step="0.001" (input)="calcTotal()">
+                  </div>
+                  <div class="fg">
+                    <label class="fl fl-req">Precio unitario</label>
+                    <div class="input-wrap">
+                      <span class="input-prefix">$</span>
+                      <input type="number" formControlName="precioUnitario" class="form-control-mag fld-prefix"
+                             min="0.01" step="0.01" (input)="calcTotal()">
                     </div>
-                    <div style="display:flex;justify-content:space-between;padding:8px 0;font-family:var(--font-display);font-size:18px;font-weight:800;border-top:1px solid var(--border);margin-top:4px">
-                      <span>Total</span>
-                      <span style="color:var(--accent)">{{ total | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+                  </div>
+                  <div class="fg">
+                    <label class="fl">Descuento</label>
+                    <div class="input-wrap">
+                      <span class="input-prefix">$</span>
+                      <input type="number" formControlName="descuento" class="form-control-mag fld-prefix"
+                             min="0" step="0.01" (input)="calcTotal()">
                     </div>
                   </div>
                 </div>
               </div>
             </div>
+
+            <div class="concepto-totals">
+              <div class="concepto-totals-row">
+                <span class="concepto-totals-lbl">Subtotal</span>
+                <span class="concepto-totals-val">{{ subtotal | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+              </div>
+              <div class="concepto-totals-row">
+                <span class="concepto-totals-lbl">IVA</span>
+                <span class="concepto-totals-val">{{ iva | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+              </div>
+              <div class="concepto-totals-row concepto-totals-grand">
+                <span>Total</span>
+                <span style="color:var(--accent)">{{ total | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+              </div>
+            </div>
           </div>
 
-          <!-- ══ 3P: Complemento de Pago — solo tipo P ══ -->
+          <!-- ══ 3P: Complemento de Pago ══════════════════════════════ -->
           <ng-container *ngIf="tipoActual === 'P'" [formGroup]="pago">
-            <div class="card-mag animate-in delay-3">
-              <div class="card-header-mag">
+            <div class="emit-card animate-in delay-3">
+              <div class="emit-card-hdr">
+                <div class="emit-sec-num emit-sec-num-purple">3</div>
                 <div>
-                  <div class="card-title">3. Complemento de Pago</div>
-                  <div class="card-subtitle">Datos del pago recibido y CFDIs que se están liquidando</div>
+                  <div class="emit-sec-title">Complemento de Pago</div>
+                  <div class="emit-sec-sub">Datos del pago recibido y CFDIs que se están liquidando</div>
                 </div>
-                <button type="button" class="btn-mag btn-outline btn-sm"
+                <button type="button" class="btn-mag btn-outline btn-sm" style="margin-left:auto"
                         (click)="docsPago.push(newDocumentoRelacionado())">
                   <span class="material-icons-round" style="font-size:16px">add</span> Agregar documento
                 </button>
               </div>
-              <div class="card-body-mag">
+              <div class="emit-card-body">
 
-                <!-- Datos del pago -->
-                <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0 20px" class="form-mag">
-                  <div class="form-group">
-                    <label>Fecha de pago *</label>
+                <div class="subsec-label" style="margin-bottom:16px">
+                  <span class="material-icons-round" style="font-size:15px">payments</span>
+                  Datos del pago
+                </div>
+                <div class="emit-grid-4">
+                  <div class="fg">
+                    <label class="fl fl-req">Fecha de pago</label>
                     <input type="date" formControlName="fechaPago" class="form-control-mag">
                   </div>
-                  <div class="form-group">
-                    <label>Monto pagado *</label>
-                    <input type="number" formControlName="monto" class="form-control-mag" min="0.01" step="0.01">
+                  <div class="fg">
+                    <label class="fl fl-req">Monto pagado</label>
+                    <div class="input-wrap">
+                      <span class="input-prefix">$</span>
+                      <input type="number" formControlName="monto" class="form-control-mag fld-prefix"
+                             min="0.01" step="0.01">
+                    </div>
                   </div>
-                  <div class="form-group">
-                    <label>Moneda del pago</label>
-                    <select formControlName="moneda" class="form-control-mag">
-                      <option value="MXN">MXN — Peso Mexicano</option>
-                      <option value="USD">USD — Dólar</option>
-                      <option value="EUR">EUR — Euro</option>
-                    </select>
+                  <div class="fg">
+                    <label class="fl">Moneda del pago</label>
+                    <div class="sel-wrap">
+                      <select formControlName="moneda" class="form-control-mag">
+                        <option value="MXN">MXN — Peso Mexicano</option>
+                        <option value="USD">USD — Dólar</option>
+                        <option value="EUR">EUR — Euro</option>
+                      </select>
+                      <span class="material-icons-round sel-ico">expand_more</span>
+                    </div>
                   </div>
-                  <div class="form-group">
-                    <label>No. Operación</label>
+                  <div class="fg">
+                    <label class="fl">No. Operación</label>
                     <input type="text" formControlName="numOperacion" class="form-control-mag"
-                           placeholder="Referencia bancaria / transferencia">
+                           placeholder="Ref. bancaria / folio transferencia">
                   </div>
                 </div>
 
-                <!-- Documentos relacionados -->
-                <div style="font-size:12px;font-weight:700;color:var(--text-muted);margin:20px 0 12px;text-transform:uppercase;letter-spacing:0.5px;display:flex;align-items:center;gap:8px">
-                  <span class="material-icons-round" style="font-size:16px">receipt_long</span>
+                <div class="subsec-label" style="margin-top:24px;margin-bottom:16px">
+                  <span class="material-icons-round" style="font-size:15px">receipt_long</span>
                   CFDIs que se están pagando
                 </div>
 
                 <div formArrayName="documentosRelacionados">
                   <div *ngFor="let d of docsPago.controls; let i=index"
-                       [formGroupName]="i"
-                       style="padding:16px;margin-bottom:12px;background:var(--bg-card2);border-radius:8px;border:1px solid var(--border-light)">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-                      <span style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase">
-                        Documento {{ i+1 }}
-                      </span>
+                       [formGroupName]="i" class="doc-pago-card">
+                    <div class="doc-pago-hdr">
+                      <span class="doc-pago-num">Documento {{ i+1 }}</span>
                       <button type="button" class="btn-mag btn-danger btn-sm"
                               (click)="docsPago.removeAt(i)" *ngIf="docsPago.length > 1">
                         <span class="material-icons-round" style="font-size:14px">delete</span>
                       </button>
                     </div>
-                    <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:0 16px" class="form-mag">
-                      <div class="form-group" style="grid-column:1/-1">
-                        <label>UUID del CFDI original *</label>
-                        <input type="text" formControlName="idDocumento" class="form-control-mag"
-                               placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                               style="font-family:monospace;font-size:12px;letter-spacing:0.5px">
-                      </div>
-                      <div class="form-group">
-                        <label>Serie del CFDI</label>
+                    <div class="fg" style="margin-bottom:16px">
+                      <label class="fl fl-req">UUID del CFDI original</label>
+                      <input type="text" formControlName="idDocumento" class="form-control-mag fld-mono"
+                             placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+                    </div>
+                    <div class="emit-grid-4">
+                      <div class="fg">
+                        <label class="fl">Serie del CFDI</label>
                         <input type="text" formControlName="serie" class="form-control-mag" maxlength="10">
                       </div>
-                      <div class="form-group">
-                        <label>Folio del CFDI</label>
+                      <div class="fg">
+                        <label class="fl">Folio del CFDI</label>
                         <input type="text" formControlName="folio" class="form-control-mag">
                       </div>
-                      <div class="form-group">
-                        <label>Moneda CFDI</label>
-                        <select formControlName="moneda" class="form-control-mag">
-                          <option value="MXN">MXN</option>
-                          <option value="USD">USD</option>
-                          <option value="EUR">EUR</option>
-                        </select>
+                      <div class="fg">
+                        <label class="fl">Moneda CFDI</label>
+                        <div class="sel-wrap">
+                          <select formControlName="moneda" class="form-control-mag">
+                            <option value="MXN">MXN</option>
+                            <option value="USD">USD</option>
+                            <option value="EUR">EUR</option>
+                          </select>
+                          <span class="material-icons-round sel-ico">expand_more</span>
+                        </div>
                       </div>
-                      <div class="form-group">
-                        <label>Método de pago orig.</label>
-                        <select formControlName="metodoPago" class="form-control-mag">
-                          <option value="PPD">PPD — Parcialidades</option>
-                          <option value="PUE">PUE — Una exhibición</option>
-                        </select>
+                      <div class="fg">
+                        <label class="fl">Método de pago orig.</label>
+                        <div class="sel-wrap">
+                          <select formControlName="metodoPago" class="form-control-mag">
+                            <option value="PPD">PPD — Parcialidades</option>
+                            <option value="PUE">PUE — Una exhibición</option>
+                          </select>
+                          <span class="material-icons-round sel-ico">expand_more</span>
+                        </div>
                       </div>
-                      <div class="form-group">
-                        <label>No. Parcialidad *</label>
-                        <input type="number" formControlName="numeroParcialidad"
-                               class="form-control-mag" min="1">
+                      <div class="fg">
+                        <label class="fl fl-req">No. Parcialidad</label>
+                        <input type="number" formControlName="numeroParcialidad" class="form-control-mag" min="1">
                       </div>
-                      <div class="form-group">
-                        <label>Saldo anterior *</label>
-                        <input type="number" formControlName="saldoAnterior"
-                               class="form-control-mag" min="0" step="0.01"
-                               (input)="calcSaldoInsoluto(d)">
+                      <div class="fg">
+                        <label class="fl fl-req">Saldo anterior</label>
+                        <div class="input-wrap">
+                          <span class="input-prefix">$</span>
+                          <input type="number" formControlName="saldoAnterior" class="form-control-mag fld-prefix"
+                                 min="0" step="0.01" (input)="calcSaldoInsoluto(d)">
+                        </div>
                       </div>
-                      <div class="form-group">
-                        <label>Importe pagado *</label>
-                        <input type="number" formControlName="importePagado"
-                               class="form-control-mag" min="0" step="0.01"
-                               (input)="calcSaldoInsoluto(d)">
+                      <div class="fg">
+                        <label class="fl fl-req">Importe pagado</label>
+                        <div class="input-wrap">
+                          <span class="input-prefix">$</span>
+                          <input type="number" formControlName="importePagado" class="form-control-mag fld-prefix"
+                                 min="0" step="0.01" (input)="calcSaldoInsoluto(d)">
+                        </div>
                       </div>
-                      <div class="form-group">
-                        <label>Saldo insoluto</label>
-                        <div style="padding:11px 14px;background:var(--bg-card);border:1.5px solid var(--border-light);border-radius:var(--radius-sm);font-family:var(--font-display);font-weight:700;font-size:14px"
-                             [style.color]="(d.get('saldoInsoluto')?.value || 0) > 0 ? 'var(--warning)' : 'var(--accent)'">
+                      <div class="fg">
+                        <label class="fl">Saldo insoluto</label>
+                        <div class="fld-display"
+                             [class.fld-display-warn]="(d.get('saldoInsoluto')?.value || 0) > 0"
+                             [class.fld-display-ok]="(d.get('saldoInsoluto')?.value || 0) === 0">
                           {{ (d.get('saldoInsoluto')?.value || 0) | currency:'MXN':'symbol-narrow':'1.2-2' }}
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
-
               </div>
             </div>
           </ng-container>
 
-          <!-- ══ 3N: Complemento de Nómina — solo tipo N ══ -->
+          <!-- ══ 3N: Complemento de Nómina ═════════════════════════════ -->
           <ng-container *ngIf="tipoActual === 'N'" formGroupName="complementoNomina">
 
-            <div class="card-mag animate-in delay-3">
-              <div class="card-header-mag">
+            <!-- Período y empleador -->
+            <div class="emit-card animate-in delay-3">
+              <div class="emit-card-hdr">
+                <div class="emit-sec-num emit-sec-num-green">3</div>
                 <div>
-                  <div class="card-title">3. Complemento de Nómina — Datos generales</div>
-                  <div class="card-subtitle">Período y datos del empleador</div>
+                  <div class="emit-sec-title">Nómina — Período</div>
+                  <div class="emit-sec-sub">Tipo de nómina, fechas y datos del empleador</div>
                 </div>
               </div>
-              <div class="card-body-mag">
-                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 20px" class="form-mag">
-                  <div class="form-group">
-                    <label>Tipo de nómina *</label>
-                    <select formControlName="tipoNomina" class="form-control-mag">
-                      <option value="O">O — Ordinaria</option>
-                      <option value="E">E — Extraordinaria</option>
-                    </select>
+              <div class="emit-card-body">
+                <div class="emit-grid-3">
+                  <div class="fg">
+                    <label class="fl fl-req">Tipo de nómina</label>
+                    <div class="sel-wrap">
+                      <select formControlName="tipoNomina" class="form-control-mag">
+                        <option value="O">O — Ordinaria</option>
+                        <option value="E">E — Extraordinaria</option>
+                      </select>
+                      <span class="material-icons-round sel-ico">expand_more</span>
+                    </div>
                   </div>
-                  <div class="form-group">
-                    <label>Fecha de pago *</label>
+                  <div class="fg">
+                    <label class="fl fl-req">Fecha de pago</label>
                     <input type="date" formControlName="fechaPago" class="form-control-mag">
                   </div>
-                  <div class="form-group">
-                    <label>Días pagados *</label>
+                  <div class="fg">
+                    <label class="fl fl-req">Días pagados</label>
                     <input type="number" formControlName="diasPagados" class="form-control-mag" min="0" step="0.001">
                   </div>
-                  <div class="form-group">
-                    <label>Fecha inicial período *</label>
+                  <div class="fg">
+                    <label class="fl fl-req">Fecha inicio período</label>
                     <input type="date" formControlName="fechaInicialPago" class="form-control-mag">
                   </div>
-                  <div class="form-group">
-                    <label>Fecha final período *</label>
+                  <div class="fg">
+                    <label class="fl fl-req">Fecha fin período</label>
                     <input type="date" formControlName="fechaFinalPago" class="form-control-mag">
                   </div>
-                  <div class="form-group">
-                    <label>Periodicidad de pago *</label>
-                    <select formControlName="periodicidadPago" class="form-control-mag">
-                      <option value="">Seleccionar...</option>
-                      <option *ngFor="let p of periodicidades" [value]="p.value">{{ p.label }}</option>
-                    </select>
+                  <div class="fg">
+                    <label class="fl fl-req">Periodicidad de pago</label>
+                    <div class="sel-wrap">
+                      <select formControlName="periodicidadPago" class="form-control-mag">
+                        <option value="">Seleccionar...</option>
+                        <option *ngFor="let p of periodicidades" [value]="p.value">{{ p.label }}</option>
+                      </select>
+                      <span class="material-icons-round sel-ico">expand_more</span>
+                    </div>
                   </div>
                 </div>
 
-                <div style="font-size:12px;font-weight:700;color:var(--text-muted);margin:16px 0 8px;text-transform:uppercase;letter-spacing:0.5px">
+                <div class="subsec-label" style="margin-top:20px;margin-bottom:16px">
+                  <span class="material-icons-round" style="font-size:15px">business</span>
                   Datos del empleador
                 </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 20px" class="form-mag">
-                  <div class="form-group">
-                    <label>Registro patronal *</label>
+                <div class="emit-grid-3">
+                  <div class="fg">
+                    <label class="fl fl-req">Registro patronal</label>
                     <input type="text" formControlName="registroPatronal" class="form-control-mag" placeholder="A1234567891">
                   </div>
-                  <div class="form-group">
-                    <label>CURP patrón</label>
-                    <input type="text" formControlName="curpPatron" class="form-control-mag" maxlength="18">
+                  <div class="fg">
+                    <label class="fl">CURP patrón</label>
+                    <input type="text" formControlName="curpPatron" class="form-control-mag fld-mono" maxlength="18">
                   </div>
-                  <div class="form-group">
-                    <label>Entidad federativa empleador *</label>
-                    <select formControlName="entidadFederativa" class="form-control-mag">
-                      <option value="">Seleccionar...</option>
-                      <option *ngFor="let e of entidades" [value]="e.value">{{ e.label }}</option>
-                    </select>
+                  <div class="fg">
+                    <label class="fl fl-req">Entidad federativa empleador</label>
+                    <div class="sel-wrap">
+                      <select formControlName="entidadFederativa" class="form-control-mag">
+                        <option value="">Seleccionar...</option>
+                        <option *ngFor="let e of entidades" [value]="e.value">{{ e.label }}</option>
+                      </select>
+                      <span class="material-icons-round sel-ico">expand_more</span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div class="card-mag">
-              <div class="card-header-mag">
+            <!-- Datos del trabajador -->
+            <div class="emit-card">
+              <div class="emit-card-hdr">
+                <div class="emit-sec-num emit-sec-num-green">4</div>
                 <div>
-                  <div class="card-title">Datos del trabajador</div>
-                  <div class="card-subtitle">Información laboral del empleado</div>
+                  <div class="emit-sec-title">Datos del trabajador</div>
+                  <div class="emit-sec-sub">Información laboral y salarial del empleado</div>
                 </div>
               </div>
-              <div class="card-body-mag">
-                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 20px" class="form-mag">
-                  <div class="form-group">
-                    <label>CURP *</label>
-                    <input type="text" formControlName="curpEmpleado" class="form-control-mag" maxlength="18" style="font-family:monospace">
+              <div class="emit-card-body">
+                <div class="emit-grid-3">
+                  <div class="fg">
+                    <label class="fl fl-req">CURP</label>
+                    <input type="text" formControlName="curpEmpleado" class="form-control-mag fld-mono" maxlength="18">
                   </div>
-                  <div class="form-group">
-                    <label>NSS *</label>
-                    <input type="text" formControlName="nss" class="form-control-mag" maxlength="11" style="font-family:monospace">
+                  <div class="fg">
+                    <label class="fl fl-req">NSS</label>
+                    <input type="text" formControlName="nss" class="form-control-mag fld-mono" maxlength="11">
                   </div>
-                  <div class="form-group">
-                    <label>Fecha inicio relación laboral *</label>
+                  <div class="fg">
+                    <label class="fl fl-req">Fecha inicio relación laboral</label>
                     <input type="date" formControlName="fechaInicioRelLaboral" class="form-control-mag">
                   </div>
-                  <div class="form-group">
-                    <label>Tipo de contrato *</label>
-                    <select formControlName="tipoContrato" class="form-control-mag">
-                      <option value="">Seleccionar...</option>
-                      <option *ngFor="let t of tiposContrato" [value]="t.value">{{ t.label }}</option>
-                    </select>
+                  <div class="fg">
+                    <label class="fl fl-req">Tipo de contrato</label>
+                    <div class="sel-wrap">
+                      <select formControlName="tipoContrato" class="form-control-mag">
+                        <option value="">Seleccionar...</option>
+                        <option *ngFor="let t of tiposContrato" [value]="t.value">{{ t.label }}</option>
+                      </select>
+                      <span class="material-icons-round sel-ico">expand_more</span>
+                    </div>
                   </div>
-                  <div class="form-group">
-                    <label>Tipo de régimen *</label>
-                    <select formControlName="tipoRegimen" class="form-control-mag">
-                      <option value="">Seleccionar...</option>
-                      <option *ngFor="let t of tiposRegimenLaboral" [value]="t.value">{{ t.label }}</option>
-                    </select>
+                  <div class="fg">
+                    <label class="fl fl-req">Tipo de régimen</label>
+                    <div class="sel-wrap">
+                      <select formControlName="tipoRegimen" class="form-control-mag">
+                        <option value="">Seleccionar...</option>
+                        <option *ngFor="let t of tiposRegimenLaboral" [value]="t.value">{{ t.label }}</option>
+                      </select>
+                      <span class="material-icons-round sel-ico">expand_more</span>
+                    </div>
                   </div>
-                  <div class="form-group">
-                    <label>No. empleado *</label>
+                  <div class="fg">
+                    <label class="fl fl-req">No. empleado</label>
                     <input type="text" formControlName="numEmpleado" class="form-control-mag">
                   </div>
-                  <div class="form-group">
-                    <label>Departamento</label>
+                  <div class="fg">
+                    <label class="fl">Departamento</label>
                     <input type="text" formControlName="departamento" class="form-control-mag">
                   </div>
-                  <div class="form-group">
-                    <label>Puesto</label>
+                  <div class="fg">
+                    <label class="fl">Puesto</label>
                     <input type="text" formControlName="puesto" class="form-control-mag">
                   </div>
-                  <div class="form-group">
-                    <label>Riesgo de trabajo *</label>
-                    <select formControlName="riesgoTrabajo" class="form-control-mag">
-                      <option value="1">1 — Clase I</option>
-                      <option value="2">2 — Clase II</option>
-                      <option value="3">3 — Clase III</option>
-                      <option value="4">4 — Clase IV</option>
-                      <option value="5">5 — Clase V</option>
-                    </select>
+                  <div class="fg">
+                    <label class="fl fl-req">Riesgo de trabajo</label>
+                    <div class="sel-wrap">
+                      <select formControlName="riesgoTrabajo" class="form-control-mag">
+                        <option value="1">1 — Clase I (mínimo)</option>
+                        <option value="2">2 — Clase II</option>
+                        <option value="3">3 — Clase III</option>
+                        <option value="4">4 — Clase IV</option>
+                        <option value="5">5 — Clase V (máximo)</option>
+                      </select>
+                      <span class="material-icons-round sel-ico">expand_more</span>
+                    </div>
                   </div>
-                  <div class="form-group">
-                    <label>Banco</label>
-                    <select formControlName="banco" class="form-control-mag">
-                      <option value="">Sin banco</option>
-                      <option value="002">002 — BBVA Bancomer</option>
-                      <option value="006">006 — Bancomext</option>
-                      <option value="009">009 — Banobras</option>
-                      <option value="012">012 — HSBC</option>
-                      <option value="014">014 — Santander</option>
-                      <option value="021">021 — HSBC</option>
-                      <option value="030">030 — Bajío</option>
-                      <option value="036">036 — Inbursa</option>
-                      <option value="044">044 — Scotiabank</option>
-                      <option value="058">058 — Banregio</option>
-                      <option value="072">072 — Banorte</option>
-                      <option value="127">127 — Azteca</option>
-                      <option value="646">646 — STP</option>
-                      <option value="706">706 — Arcus</option>
-                      <option value="728">728 — Spin by OXXO</option>
-                    </select>
+                  <div class="fg">
+                    <label class="fl">Banco</label>
+                    <div class="sel-wrap">
+                      <select formControlName="banco" class="form-control-mag">
+                        <option value="">Sin banco</option>
+                        <option value="002">002 — BBVA Bancomer</option>
+                        <option value="006">006 — Bancomext</option>
+                        <option value="009">009 — Banobras</option>
+                        <option value="012">012 — HSBC</option>
+                        <option value="014">014 — Santander</option>
+                        <option value="021">021 — HSBC</option>
+                        <option value="030">030 — Bajío</option>
+                        <option value="036">036 — Inbursa</option>
+                        <option value="044">044 — Scotiabank</option>
+                        <option value="058">058 — Banregio</option>
+                        <option value="072">072 — Banorte</option>
+                        <option value="127">127 — Azteca</option>
+                        <option value="646">646 — STP</option>
+                        <option value="706">706 — Arcus</option>
+                        <option value="728">728 — Spin by OXXO</option>
+                      </select>
+                      <span class="material-icons-round sel-ico">expand_more</span>
+                    </div>
                   </div>
-                  <div class="form-group">
-                    <label>Cuenta bancaria (CLABE)</label>
-                    <input type="text" formControlName="cuentaBancaria" class="form-control-mag" maxlength="18" style="font-family:monospace">
+                  <div class="fg">
+                    <label class="fl">Cuenta bancaria (CLABE)</label>
+                    <input type="text" formControlName="cuentaBancaria" class="form-control-mag fld-mono" maxlength="18">
                   </div>
-                  <div class="form-group">
-                    <label>Clave entidad federativa *</label>
-                    <select formControlName="claveEntFed" class="form-control-mag">
-                      <option value="">Seleccionar...</option>
-                      <option *ngFor="let e of entidades" [value]="e.value">{{ e.label }}</option>
-                    </select>
+                  <div class="fg">
+                    <label class="fl fl-req">Clave entidad federativa</label>
+                    <div class="sel-wrap">
+                      <select formControlName="claveEntFed" class="form-control-mag">
+                        <option value="">Seleccionar...</option>
+                        <option *ngFor="let e of entidades" [value]="e.value">{{ e.label }}</option>
+                      </select>
+                      <span class="material-icons-round sel-ico">expand_more</span>
+                    </div>
                   </div>
-                  <div class="form-group">
-                    <label>Salario base cotización *</label>
-                    <input type="number" formControlName="salarioBase" class="form-control-mag" min="0" step="0.01">
+                </div>
+
+                <div class="subsec-label" style="margin-top:20px;margin-bottom:16px">
+                  <span class="material-icons-round" style="font-size:15px">monetization_on</span>
+                  Información salarial
+                </div>
+                <div class="emit-grid-2">
+                  <div class="fg">
+                    <label class="fl fl-req">Salario base de cotización</label>
+                    <div class="input-wrap">
+                      <span class="input-prefix">$</span>
+                      <input type="number" formControlName="salarioBase" class="form-control-mag fld-prefix" min="0" step="0.01">
+                    </div>
                   </div>
-                  <div class="form-group">
-                    <label>Salario diario integrado *</label>
-                    <input type="number" formControlName="salarioDiarioIntegrado" class="form-control-mag" min="0" step="0.01">
+                  <div class="fg">
+                    <label class="fl fl-req">Salario diario integrado (SDI)</label>
+                    <div class="input-wrap">
+                      <span class="input-prefix">$</span>
+                      <input type="number" formControlName="salarioDiarioIntegrado" class="form-control-mag fld-prefix" min="0" step="0.01">
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div class="card-mag">
-              <div class="card-header-mag">
+            <!-- Percepciones -->
+            <div class="emit-card">
+              <div class="emit-card-hdr">
+                <div class="emit-sec-num emit-sec-num-green">5</div>
                 <div>
-                  <div class="card-title">Percepciones</div>
-                  <div class="card-subtitle">Ingresos del trabajador en este período</div>
+                  <div class="emit-sec-title">Percepciones</div>
+                  <div class="emit-sec-sub">Ingresos del trabajador en este período</div>
                 </div>
-                <button type="button" class="btn-mag btn-outline btn-sm" (click)="addPercepcion()">
+                <button type="button" class="btn-mag btn-primary btn-sm" style="margin-left:auto"
+                        (click)="addPercepcion()">
                   <span class="material-icons-round" style="font-size:16px">add</span> Agregar
                 </button>
               </div>
-              <div class="card-body-mag" style="padding:0" formArrayName="percepciones">
+              <div formArrayName="percepciones">
                 <div *ngFor="let p of percepciones.controls; let i=index"
-                     [formGroupName]="i"
-                     style="padding:14px 20px;border-bottom:1px solid var(--border-light)">
-                  <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr auto;gap:0 12px;align-items:end" class="form-mag">
-                    <div class="form-group" style="margin-bottom:0">
-                      <label>Tipo *</label>
-                      <select formControlName="tipoPercepcion" class="form-control-mag">
-                        <option value="">Seleccionar...</option>
-                        <option *ngFor="let t of tiposPercepcion" [value]="t.value">{{ t.label }}</option>
-                      </select>
+                     [formGroupName]="i" class="nomina-row">
+                  <div class="nomina-row-grid nomina-row-percepcion">
+                    <div class="fg" style="margin-bottom:0">
+                      <label class="fl">Tipo *</label>
+                      <div class="sel-wrap">
+                        <select formControlName="tipoPercepcion" class="form-control-mag">
+                          <option value="">Seleccionar...</option>
+                          <option *ngFor="let t of tiposPercepcion" [value]="t.value">{{ t.label }}</option>
+                        </select>
+                        <span class="material-icons-round sel-ico">expand_more</span>
+                      </div>
                     </div>
-                    <div class="form-group" style="margin-bottom:0">
-                      <label>Clave *</label>
+                    <div class="fg" style="margin-bottom:0">
+                      <label class="fl">Clave *</label>
                       <input type="text" formControlName="clave" class="form-control-mag" placeholder="001">
                     </div>
-                    <div class="form-group" style="margin-bottom:0">
-                      <label>Concepto *</label>
+                    <div class="fg" style="margin-bottom:0">
+                      <label class="fl">Concepto *</label>
                       <input type="text" formControlName="concepto" class="form-control-mag" placeholder="Sueldo">
                     </div>
-                    <div class="form-group" style="margin-bottom:0">
-                      <label>Imp. Gravado *</label>
-                      <input type="number" formControlName="importeGravado" class="form-control-mag" min="0" step="0.01" (input)="calcTotalesNomina()">
+                    <div class="fg" style="margin-bottom:0">
+                      <label class="fl">Imp. Gravado *</label>
+                      <div class="input-wrap">
+                        <span class="input-prefix">$</span>
+                        <input type="number" formControlName="importeGravado" class="form-control-mag fld-prefix"
+                               min="0" step="0.01" (input)="calcTotalesNomina()">
+                      </div>
                     </div>
-                    <div class="form-group" style="margin-bottom:0">
-                      <label>Imp. Exento</label>
-                      <input type="number" formControlName="importeExento" class="form-control-mag" min="0" step="0.01" (input)="calcTotalesNomina()">
+                    <div class="fg" style="margin-bottom:0">
+                      <label class="fl">Imp. Exento</label>
+                      <div class="input-wrap">
+                        <span class="input-prefix">$</span>
+                        <input type="number" formControlName="importeExento" class="form-control-mag fld-prefix"
+                               min="0" step="0.01" (input)="calcTotalesNomina()">
+                      </div>
                     </div>
-                    <button type="button" class="btn-mag btn-danger btn-sm" (click)="removePercepcion(i)" style="margin-bottom:2px">
-                      <span class="material-icons-round" style="font-size:14px">delete</span>
-                    </button>
+                    <div style="display:flex;align-items:flex-end;padding-bottom:2px">
+                      <button type="button" class="btn-mag btn-danger btn-sm" (click)="removePercepcion(i)">
+                        <span class="material-icons-round" style="font-size:14px">delete</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
-                <div *ngIf="percepciones.length === 0"
-                     style="padding:16px 20px;text-align:center;font-size:13px;color:var(--text-muted)">
+                <div *ngIf="percepciones.length === 0" class="empty-state-sm">
                   Agrega al menos una percepción
                 </div>
-                <div style="padding:12px 20px;background:var(--bg-card2);border-top:1px solid var(--border-light);display:flex;gap:24px;justify-content:flex-end;font-size:13px">
-                  <span>Total sueldos: <strong>{{ nomTotalSueldos | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></span>
+                <div *ngIf="percepciones.length > 0" class="nomina-totals">
+                  <span>Sueldos: <strong>{{ nomTotalSueldos | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></span>
                   <span>Gravado: <strong>{{ nomTotalGravado | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></span>
                   <span>Exento: <strong>{{ nomTotalExento | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></span>
                 </div>
               </div>
             </div>
 
-            <div class="card-mag">
-              <div class="card-header-mag">
+            <!-- Deducciones -->
+            <div class="emit-card">
+              <div class="emit-card-hdr">
+                <div class="emit-sec-num emit-sec-num-green">6</div>
                 <div>
-                  <div class="card-title">Deducciones <span style="font-size:12px;font-weight:400;color:var(--text-muted)">opcional</span></div>
-                  <div class="card-subtitle">Descuentos aplicados al trabajador</div>
+                  <div class="emit-sec-title">Deducciones <span class="optional-badge">opcional</span></div>
+                  <div class="emit-sec-sub">Descuentos aplicados al trabajador</div>
                 </div>
-                <button type="button" class="btn-mag btn-outline btn-sm" (click)="addDeduccion()">
+                <button type="button" class="btn-mag btn-outline btn-sm" style="margin-left:auto"
+                        (click)="addDeduccion()">
                   <span class="material-icons-round" style="font-size:16px">add</span> Agregar
                 </button>
               </div>
-              <div class="card-body-mag" style="padding:0" formArrayName="deducciones">
+              <div formArrayName="deducciones">
                 <div *ngFor="let d of deducciones.controls; let i=index"
-                     [formGroupName]="i"
-                     style="padding:14px 20px;border-bottom:1px solid var(--border-light)">
-                  <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:0 12px;align-items:end" class="form-mag">
-                    <div class="form-group" style="margin-bottom:0">
-                      <label>Tipo *</label>
-                      <select formControlName="tipoDeduccion" class="form-control-mag">
-                        <option value="">Seleccionar...</option>
-                        <option *ngFor="let t of tiposDeduccion" [value]="t.value">{{ t.label }}</option>
-                      </select>
+                     [formGroupName]="i" class="nomina-row">
+                  <div class="nomina-row-grid nomina-row-deduccion">
+                    <div class="fg" style="margin-bottom:0">
+                      <label class="fl">Tipo *</label>
+                      <div class="sel-wrap">
+                        <select formControlName="tipoDeduccion" class="form-control-mag">
+                          <option value="">Seleccionar...</option>
+                          <option *ngFor="let t of tiposDeduccion" [value]="t.value">{{ t.label }}</option>
+                        </select>
+                        <span class="material-icons-round sel-ico">expand_more</span>
+                      </div>
                     </div>
-                    <div class="form-group" style="margin-bottom:0">
-                      <label>Clave *</label>
+                    <div class="fg" style="margin-bottom:0">
+                      <label class="fl">Clave *</label>
                       <input type="text" formControlName="clave" class="form-control-mag" placeholder="001">
                     </div>
-                    <div class="form-group" style="margin-bottom:0">
-                      <label>Concepto *</label>
+                    <div class="fg" style="margin-bottom:0">
+                      <label class="fl">Concepto *</label>
                       <input type="text" formControlName="concepto" class="form-control-mag">
                     </div>
-                    <div class="form-group" style="margin-bottom:0">
-                      <label>Importe *</label>
-                      <input type="number" formControlName="importe" class="form-control-mag" min="0" step="0.01" (input)="calcTotalesNomina()">
+                    <div class="fg" style="margin-bottom:0">
+                      <label class="fl">Importe *</label>
+                      <div class="input-wrap">
+                        <span class="input-prefix">$</span>
+                        <input type="number" formControlName="importe" class="form-control-mag fld-prefix"
+                               min="0" step="0.01" (input)="calcTotalesNomina()">
+                      </div>
                     </div>
-                    <button type="button" class="btn-mag btn-danger btn-sm" (click)="removeDeduccion(i)" style="margin-bottom:2px">
-                      <span class="material-icons-round" style="font-size:14px">delete</span>
-                    </button>
+                    <div style="display:flex;align-items:flex-end;padding-bottom:2px">
+                      <button type="button" class="btn-mag btn-danger btn-sm" (click)="removeDeduccion(i)">
+                        <span class="material-icons-round" style="font-size:14px">delete</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
-                <div *ngIf="deducciones.length === 0"
-                     style="padding:16px 20px;text-align:center;font-size:13px;color:var(--text-muted)">
-                  Sin deducciones
-                </div>
-                <div *ngIf="deducciones.length > 0"
-                     style="padding:12px 20px;background:var(--bg-card2);border-top:1px solid var(--border-light);display:flex;gap:24px;justify-content:flex-end;font-size:13px">
-                  <span>Total otras ded.: <strong>{{ nomTotalOtrasDed | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></span>
-                  <span>Total imp. ret.: <strong>{{ nomTotalImpRet | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></span>
+                <div *ngIf="deducciones.length === 0" class="empty-state-sm">Sin deducciones</div>
+                <div *ngIf="deducciones.length > 0" class="nomina-totals">
+                  <span>Otras ded.: <strong>{{ nomTotalOtrasDed | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></span>
+                  <span>Imp. retenido: <strong>{{ nomTotalImpRet | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></span>
                 </div>
               </div>
             </div>
 
-            <div class="card-mag">
-              <div class="card-header-mag">
+            <!-- Otros pagos -->
+            <div class="emit-card">
+              <div class="emit-card-hdr">
+                <div class="emit-sec-num emit-sec-num-green">7</div>
                 <div>
-                  <div class="card-title">Otros pagos <span style="font-size:12px;font-weight:400;color:var(--text-muted)">opcional</span></div>
-                  <div class="card-subtitle">Subsidio al empleo u otros conceptos</div>
+                  <div class="emit-sec-title">Otros pagos <span class="optional-badge">opcional</span></div>
+                  <div class="emit-sec-sub">Subsidio al empleo y otros conceptos especiales</div>
                 </div>
-                <button type="button" class="btn-mag btn-outline btn-sm" (click)="addOtroPago()">
+                <button type="button" class="btn-mag btn-outline btn-sm" style="margin-left:auto"
+                        (click)="addOtroPago()">
                   <span class="material-icons-round" style="font-size:16px">add</span> Agregar
                 </button>
               </div>
-              <div class="card-body-mag" style="padding:0" formArrayName="otrosPagos">
+              <div formArrayName="otrosPagos">
                 <div *ngFor="let o of otrosPagos.controls; let i=index"
-                     [formGroupName]="i"
-                     style="padding:14px 20px;border-bottom:1px solid var(--border-light)">
-                  <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:0 12px;align-items:end" class="form-mag">
-                    <div class="form-group" style="margin-bottom:0">
-                      <label>Tipo *</label>
-                      <select formControlName="tipoPago" class="form-control-mag">
-                        <option value="">Seleccionar...</option>
-                        <option *ngFor="let t of tiposOtroPago" [value]="t.value">{{ t.label }}</option>
-                      </select>
+                     [formGroupName]="i" class="nomina-row">
+                  <div class="nomina-row-grid nomina-row-deduccion">
+                    <div class="fg" style="margin-bottom:0">
+                      <label class="fl">Tipo *</label>
+                      <div class="sel-wrap">
+                        <select formControlName="tipoPago" class="form-control-mag">
+                          <option value="">Seleccionar...</option>
+                          <option *ngFor="let t of tiposOtroPago" [value]="t.value">{{ t.label }}</option>
+                        </select>
+                        <span class="material-icons-round sel-ico">expand_more</span>
+                      </div>
                     </div>
-                    <div class="form-group" style="margin-bottom:0">
-                      <label>Clave *</label>
+                    <div class="fg" style="margin-bottom:0">
+                      <label class="fl">Clave *</label>
                       <input type="text" formControlName="clave" class="form-control-mag">
                     </div>
-                    <div class="form-group" style="margin-bottom:0">
-                      <label>Concepto *</label>
+                    <div class="fg" style="margin-bottom:0">
+                      <label class="fl">Concepto *</label>
                       <input type="text" formControlName="concepto" class="form-control-mag">
                     </div>
-                    <div class="form-group" style="margin-bottom:0">
-                      <label>Importe *</label>
-                      <input type="number" formControlName="importe" class="form-control-mag" min="0" step="0.01">
+                    <div class="fg" style="margin-bottom:0">
+                      <label class="fl">Importe *</label>
+                      <div class="input-wrap">
+                        <span class="input-prefix">$</span>
+                        <input type="number" formControlName="importe" class="form-control-mag fld-prefix"
+                               min="0" step="0.01">
+                      </div>
                     </div>
-                    <button type="button" class="btn-mag btn-danger btn-sm" (click)="removeOtroPago(i)" style="margin-bottom:2px">
-                      <span class="material-icons-round" style="font-size:14px">delete</span>
-                    </button>
+                    <div style="display:flex;align-items:flex-end;padding-bottom:2px">
+                      <button type="button" class="btn-mag btn-danger btn-sm" (click)="removeOtroPago(i)">
+                        <span class="material-icons-round" style="font-size:14px">delete</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
-                <div *ngIf="otrosPagos.length === 0"
-                     style="padding:16px 20px;text-align:center;font-size:13px;color:var(--text-muted)">
-                  Sin otros pagos
-                </div>
+                <div *ngIf="otrosPagos.length === 0" class="empty-state-sm">Sin otros pagos</div>
               </div>
             </div>
 
           </ng-container>
 
-          <!-- ══ 4: CFDI Relacionados ══ -->
-          <div class="card-mag animate-in delay-4">
-            <div class="card-header-mag">
-              <div>
-                <div class="card-title">
-                  4. CFDI Relacionados
-                  <span style="font-size:12px;font-weight:400;color:var(--text-muted);margin-left:8px">opcional</span>
-                </div>
+          <!-- ══ CFDI Relacionados ══════════════════════════════════ -->
+          <div class="emit-card animate-in delay-4">
+            <div class="emit-card-hdr">
+              <div class="emit-sec-num emit-sec-num-muted">
+                <span class="material-icons-round" style="font-size:16px">link</span>
               </div>
-              <button type="button" class="btn-mag btn-outline btn-sm" (click)="addRelacionado()">
+              <div>
+                <div class="emit-sec-title">
+                  CFDI Relacionados <span class="optional-badge">opcional</span>
+                </div>
+                <div class="emit-sec-sub">Facturas anteriores que este CFDI cancela, corrige o sustituye</div>
+              </div>
+              <button type="button" class="btn-mag btn-outline btn-sm" style="margin-left:auto"
+                      (click)="addRelacionado()">
                 <span class="material-icons-round" style="font-size:16px">add</span> Agregar
               </button>
             </div>
-            <div *ngIf="relacionados.length > 0" class="card-body-mag" style="padding:0" formArrayName="cfdiRelacionados">
+            <div *ngIf="relacionados.length === 0" class="empty-state-sm">
+              Sin CFDIs relacionados — déjalo vacío si no aplica.
+            </div>
+            <div *ngIf="relacionados.length > 0" formArrayName="cfdiRelacionados">
               <div *ngFor="let r of relacionados.controls; let i=index"
-                   [formGroupName]="i"
-                   style="padding:14px 20px;border-bottom:1px solid var(--border-light)">
-                <div style="display:grid;grid-template-columns:1fr 2fr auto;gap:0 16px;align-items:end" class="form-mag">
-                  <div class="form-group" style="margin-bottom:0">
-                    <label>Tipo de relación *</label>
+                   [formGroupName]="i" class="relacionado-row">
+                <div class="fg" style="margin-bottom:0;min-width:220px;flex-shrink:0">
+                  <label class="fl fl-req">Tipo de relación</label>
+                  <div class="sel-wrap">
                     <select formControlName="tipoRelacion" class="form-control-mag">
                       <option value="">Seleccionar...</option>
                       <option *ngFor="let t of tiposRelacion" [value]="t.value">{{ t.label }}</option>
                     </select>
+                    <span class="material-icons-round sel-ico">expand_more</span>
                   </div>
-                  <div class="form-group" style="margin-bottom:0">
-                    <label>UUID *</label>
-                    <input type="text" formControlName="uuid" class="form-control-mag"
-                           placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                           style="font-family:monospace;font-size:12px">
-                  </div>
-                  <button type="button" class="btn-mag btn-danger btn-sm" (click)="removeRelacionado(i)" style="margin-bottom:2px">
+                </div>
+                <div class="fg" style="margin-bottom:0;flex:1;min-width:0">
+                  <label class="fl fl-req">UUID</label>
+                  <input type="text" formControlName="uuid" class="form-control-mag fld-mono"
+                         placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+                </div>
+                <div style="display:flex;align-items:flex-end;padding-bottom:2px;flex-shrink:0">
+                  <button type="button" class="btn-mag btn-danger btn-sm" (click)="removeRelacionado(i)">
                     <span class="material-icons-round" style="font-size:14px">delete</span>
                   </button>
                 </div>
               </div>
             </div>
-            <div *ngIf="relacionados.length === 0"
-                 style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px">
-              Sin CFDIs relacionados.
-            </div>
           </div>
 
-          <!-- ══ Errores de validación ══ -->
-          <div *ngIf="camposConError.length > 0"
-               style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:var(--radius-md);padding:14px 18px;font-size:13px;color:var(--danger)">
-            <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;font-weight:700;font-size:14px">
-              <span class="material-icons-round" style="font-size:20px;flex-shrink:0">error_outline</span>
-              Completa los siguientes campos obligatorios:
+          <!-- ══ Error de validación ══ -->
+          <div *ngIf="camposConError.length > 0" class="error-panel">
+            <div class="error-panel-hdr">
+              <span class="material-icons-round" style="font-size:20px">error_outline</span>
+              Completa los campos obligatorios antes de continuar
             </div>
-            <ul style="margin:0 0 0 30px;padding:0;display:flex;flex-direction:column;gap:3px">
-              <li *ngFor="let campo of camposConError">{{ campo }}</li>
-            </ul>
+            <div class="error-panel-list">
+              <div *ngFor="let campo of camposConError" class="error-panel-item">
+                <span class="material-icons-round" style="font-size:13px">chevron_right</span>
+                {{ campo }}
+              </div>
+            </div>
           </div>
 
           <!-- ══ Error API ══ -->
-          <div *ngIf="errorMsg"
-               style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:var(--radius-md);padding:14px 18px;font-size:13px;color:var(--danger);display:flex;gap:10px;align-items:center">
-            <span class="material-icons-round" style="font-size:20px;flex-shrink:0">error_outline</span>
-            {{ errorMsg }}
+          <div *ngIf="errorMsg" class="error-panel">
+            <div class="error-panel-hdr" style="margin-bottom:0">
+              <span class="material-icons-round" style="font-size:20px">error_outline</span>
+              {{ errorMsg }}
+            </div>
           </div>
 
-          <!-- ══ Botones ══ -->
-          <div style="display:flex;justify-content:flex-end;gap:10px;padding-bottom:32px">
-            <a routerLink="/cfdis" class="btn-mag btn-ghost btn-lg">Cancelar</a>
-            <button type="button" class="btn-mag btn-outline btn-lg"
-                    (click)="verPreview()" [disabled]="loading || loadingPreview">
-              <span *ngIf="loadingPreview" class="material-icons-round"
-                    style="font-size:20px;animation:spin 1s linear infinite">refresh</span>
-              <span *ngIf="!loadingPreview" class="material-icons-round" style="font-size:20px">picture_as_pdf</span>
-              {{ loadingPreview ? 'Generando...' : 'Vista previa' }}
-            </button>
-            <button type="submit" class="btn-mag btn-primary btn-lg" [disabled]="loading">
-              <span *ngIf="loading" class="material-icons-round"
-                    style="font-size:20px;animation:spin 1s linear infinite">refresh</span>
-              <span *ngIf="!loading" class="material-icons-round" style="font-size:20px">receipt</span>
-              {{ loading ? 'Timbrando...' : 'Timbrar CFDI' }}
-            </button>
+          <!-- ══ Acciones ══ -->
+          <div class="emit-actions">
+            <a routerLink="/cfdis" class="btn-mag btn-ghost btn-lg">
+              <span class="material-icons-round" style="font-size:18px">arrow_back</span>
+              Cancelar
+            </a>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <button type="button" class="btn-mag btn-ghost btn-lg"
+                      (click)="abrirGuardarPlantilla()" [disabled]="loading"
+                      title="Guardar configuración como plantilla frecuente">
+                <span class="material-icons-round" style="font-size:18px">bookmark_add</span>
+                Guardar plantilla
+              </button>
+              <button type="button" class="btn-mag btn-outline btn-lg"
+                      (click)="verPreview()" [disabled]="loading || loadingPreview">
+                <span *ngIf="loadingPreview" class="material-icons-round spin-anim" style="font-size:20px">refresh</span>
+                <span *ngIf="!loadingPreview" class="material-icons-round" style="font-size:20px">picture_as_pdf</span>
+                {{ loadingPreview ? 'Generando...' : 'Vista previa' }}
+              </button>
+              <button type="submit" class="btn-mag btn-primary btn-lg" [disabled]="loading">
+                <span *ngIf="loading" class="material-icons-round spin-anim" style="font-size:20px">refresh</span>
+                <span *ngIf="!loading" class="material-icons-round" style="font-size:20px">receipt</span>
+                {{ loading ? 'Timbrando...' : 'Timbrar CFDI' }}
+              </button>
+            </div>
           </div>
 
         </div>
       </form>
     </div>
 
-    <!-- ══ Modal PDF Preview ══ -->
-    <div *ngIf="mostrarPreview"
-         style="position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;padding:20px"
-         (click)="cerrarPreview()">
-      <div style="background:var(--bg-card);border-radius:var(--radius-lg);width:100%;max-width:900px;height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,0.4)"
-           (click)="$event.stopPropagation()">
-        <div style="padding:16px 20px;border-bottom:1px solid var(--border-light);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+    <!-- ══ Modal Guardar Plantilla ═══════════════════════════════ -->
+    <div *ngIf="modalGuardarPlantilla" class="modal-overlay" (click)="cerrarGuardarPlantilla()">
+      <div class="modal-card-plantilla" (click)="$event.stopPropagation()">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:20px 24px 16px;border-bottom:1px solid var(--border-light)">
           <div style="display:flex;align-items:center;gap:10px">
-            <span class="material-icons-round" style="color:#ef4444;font-size:22px">picture_as_pdf</span>
+            <span class="material-icons-round" style="color:var(--accent)">bookmark_add</span>
+            <span style="font-weight:700;font-size:16px">Guardar como plantilla frecuente</span>
+          </div>
+          <button type="button" class="btn-mag btn-ghost btn-sm" (click)="cerrarGuardarPlantilla()">
+            <span class="material-icons-round">close</span>
+          </button>
+        </div>
+        <div style="padding:20px 24px">
+          <p style="font-size:13px;opacity:.7;margin:0 0 16px">La configuración actual del formulario se guardará como plantilla. Podrás reutilizarla desde <strong>Facturas Frecuentes</strong>.</p>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">
+            <label style="font-size:13px;font-weight:600">Nombre de la plantilla <span style="color:#f87171">*</span></label>
+            <input class="form-control-mag" [(ngModel)]="plantillaNombre" maxlength="100"
+                   placeholder="Ej: Factura mensual servicios TI" style="width:100%;box-sizing:border-box">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <label style="font-size:13px;font-weight:600">Descripción (opcional)</label>
+            <input class="form-control-mag" [(ngModel)]="plantillaDescripcion" maxlength="300"
+                   placeholder="Descripción breve" style="width:100%;box-sizing:border-box">
+          </div>
+          <div *ngIf="plantillaGuardadaOk" style="display:flex;align-items:center;gap:8px;margin-top:16px;padding:12px 14px;background:rgba(0,212,170,.08);border:1px solid rgba(0,212,170,.2);border-radius:8px;color:var(--accent);font-size:13px;font-weight:600">
+            <span class="material-icons-round" style="font-size:18px">check_circle</span>
+            Plantilla guardada correctamente
+          </div>
+          <div *ngIf="plantillaError" style="margin-top:12px;color:#ef4444;font-size:13px">{{ plantillaError }}</div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:10px;padding:16px 24px 20px;border-top:1px solid var(--border-light)">
+          <button type="button" class="btn-mag btn-ghost" (click)="cerrarGuardarPlantilla()">Cerrar</button>
+          <button type="button" class="btn-mag btn-primary" (click)="guardarPlantilla()"
+                  [disabled]="!plantillaNombre.trim() || guardandoPlantilla">
+            <span *ngIf="guardandoPlantilla" class="material-icons-round spin-anim" style="font-size:16px">refresh</span>
+            <span *ngIf="!guardandoPlantilla" class="material-icons-round" style="font-size:16px">save</span>
+            {{ guardandoPlantilla ? 'Guardando...' : 'Guardar plantilla' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ Modal PDF Preview ══════════════════════════════════════ -->
+    <div *ngIf="mostrarPreview" class="modal-overlay" (click)="cerrarPreview()">
+      <div class="modal-pdf" (click)="$event.stopPropagation()">
+        <div class="modal-pdf-hdr">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div class="pdf-icon-badge">
+              <span class="material-icons-round" style="font-size:22px">picture_as_pdf</span>
+            </div>
             <div>
               <div style="font-weight:700;font-size:15px">Vista previa del CFDI</div>
               <div style="font-size:11px;color:var(--text-muted)">Sin timbrar — solo para revisión</div>
@@ -1134,16 +1390,16 @@ const PERIODICIDADES_PAGO = [
             </button>
           </div>
         </div>
-        <div style="flex:1;overflow:hidden;background:#525659;display:flex;align-items:center;justify-content:center">
-          <div *ngIf="loadingPreview" style="text-align:center;color:white">
-            <span class="material-icons-round" style="font-size:56px;animation:spin 1s linear infinite;display:block">refresh</span>
-            <div style="margin-top:16px;font-size:15px;font-weight:500">Generando vista previa...</div>
+        <div class="modal-pdf-body">
+          <div *ngIf="loadingPreview" style="text-align:center">
+            <span class="material-icons-round spin-anim" style="font-size:52px;display:block;color:rgba(255,255,255,.7)">refresh</span>
+            <div style="margin-top:16px;font-size:15px;font-weight:500;color:rgba(255,255,255,.8)">Generando vista previa...</div>
           </div>
           <iframe *ngIf="previewUrl && !loadingPreview"
                   [src]="previewSafeUrl!" style="width:100%;height:100%;border:none" type="application/pdf">
           </iframe>
         </div>
-        <div style="padding:14px 20px;border-top:1px solid var(--border-light);display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+        <div class="modal-pdf-footer">
           <div style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:6px">
             <span class="material-icons-round" style="font-size:14px">info</span>
             El folio y UUID se asignan al timbrar
@@ -1161,11 +1417,196 @@ const PERIODICIDADES_PAGO = [
     </div>
 
     <style>
-      @keyframes spin { to { transform: rotate(360deg); } }
-      .ng-invalid.ng-touched:not(form):not(ng-container):not(div) {
+      @keyframes spin  { to { transform: rotate(360deg); } }
+      .spin-anim { animation: spin 1s linear infinite; }
+
+      /* ── Validation ── */
+      .emit-wrap .ng-invalid.ng-touched.form-control-mag {
         border-color: #ef4444 !important;
-        box-shadow: 0 0 0 2px rgba(239,68,68,0.12);
+        box-shadow: 0 0 0 3px rgba(239,68,68,.08) !important;
       }
+
+      /* ── Layout ── */
+      .emit-wrap  { max-width:960px; }
+
+      /* ── Banners modo clon/edición ── */
+      .base-loading { display:flex;align-items:center;gap:10px;padding:14px 18px;margin-bottom:16px;background:var(--bg-card2);border:1px solid var(--border-light);border-radius:10px;font-size:13px;color:var(--text-muted); }
+      .modo-banner  { display:flex;align-items:flex-start;gap:12px;padding:14px 18px;margin-bottom:16px;border-radius:10px;border:1px solid; }
+      .modo-clone   { background:rgba(5,150,105,.07);border-color:rgba(5,150,105,.25);color:#047857; }
+      .modo-edit    { background:rgba(217,119,6,.07);border-color:rgba(217,119,6,.25);color:#b45309; }
+      .emit-ph    { margin-bottom:24px; }
+      .emit-ph-title h1 { font-family:var(--font-display);font-size:24px;font-weight:900;margin:8px 0 4px; }
+      .emit-ph-title p  { font-size:13px;color:var(--text-muted);margin:0; }
+      .emit-sections    { display:flex;flex-direction:column;gap:20px; }
+
+      /* ── Card ── */
+      .emit-card { background:var(--bg-card);border:1px solid var(--border-light);border-radius:16px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.05); }
+      .emit-card-hdr  { display:flex;align-items:center;gap:14px;padding:18px 24px;border-bottom:1px solid var(--border-light);background:var(--bg-card2); }
+      .emit-card-hdr-actions { display:flex;gap:8px;margin-left:auto; }
+      .emit-card-body { padding:24px; }
+
+      /* ── Section numbers ── */
+      .emit-sec-num        { width:32px;height:32px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;flex-shrink:0; }
+      .emit-sec-num-purple { background:#7c3aed; }
+      .emit-sec-num-green  { background:#059669; }
+      .emit-sec-num-muted  { background:var(--border-light);color:var(--text-muted); }
+      .emit-sec-title { font-size:15px;font-weight:700;color:var(--text-primary); }
+      .emit-sec-sub   { font-size:12px;color:var(--text-muted);margin-top:1px; }
+
+      /* ── Timbres badge ── */
+      .emit-badge-timbres { margin-left:auto;display:flex;align-items:center;gap:8px;background:var(--accent-light);border:1px solid rgba(59,99,217,.2);border-radius:10px;padding:8px 14px;color:var(--accent); }
+
+      /* ── Field groups ── */
+      .fg     { display:flex;flex-direction:column;gap:5px; }
+      .fl     { font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted); }
+      .fl-req::after { content:' *';color:#ef4444; }
+      .fl-hint       { font-size:11px;color:var(--text-muted);margin-top:2px; }
+      .fl-hint-lock  { display:flex;align-items:center;gap:3px;color:#2563eb; }
+      .optional-badge { font-size:11px;font-weight:500;color:var(--text-muted);background:var(--bg-card2);padding:1px 8px;border-radius:20px;border:1px solid var(--border-light);margin-left:6px;text-transform:none;letter-spacing:0; }
+
+      /* ── Input helpers ── */
+      .input-wrap   { position:relative; }
+      .input-prefix { position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--text-muted);font-weight:600;pointer-events:none;z-index:1; }
+      .input-ico-l  { position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:18px;color:var(--text-muted);pointer-events:none;z-index:1; }
+      .fld-prefix   { padding-left:26px !important; }
+      .fld-icon-l   { padding-left:34px !important; }
+      .fld-mono     { font-family:monospace !important;letter-spacing:.4px; }
+      .fld-readonly { background:var(--bg-card2) !important;color:var(--text-muted) !important;cursor:not-allowed; }
+
+      /* ── Select custom arrow ── */
+      .sel-wrap  { position:relative; }
+      .sel-ico   { position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:18px;color:var(--text-muted);pointer-events:none;z-index:1; }
+      .sel-wrap select { -webkit-appearance:none;appearance:none;padding-right:34px; }
+
+      /* ── form-control-mag standalone (global rule scoped to .form-mag .form-group, doesn't reach here) ── */
+      .emit-wrap .form-control-mag {
+        display:block;
+        width:100%;
+        height:40px;
+        padding:0 12px;
+        border:1.5px solid var(--border);
+        border-radius:var(--radius-sm,6px);
+        font-family:var(--font-body);
+        font-size:14px;
+        color:var(--text-primary);
+        background:var(--bg-card);
+        outline:none;
+        transition:border-color .15s,box-shadow .15s;
+        box-sizing:border-box;
+      }
+      .emit-wrap .form-control-mag:focus {
+        border-color:var(--accent);
+        box-shadow:0 0 0 3px rgba(59,99,217,.12);
+      }
+      .emit-wrap select.form-control-mag {
+        -webkit-appearance:none !important;
+        appearance:none !important;
+        cursor:pointer;
+      }
+      .emit-wrap .form-control-mag::placeholder { color:var(--text-muted);opacity:1; }
+      .emit-wrap .form-control-mag.error-field  { border-color:#ef4444 !important;box-shadow:0 0 0 3px rgba(239,68,68,.08) !important; }
+      .emit-wrap .form-control-mag:disabled,
+      .emit-wrap .form-control-mag[readonly]    { background:var(--bg-card2) !important;color:var(--text-muted) !important;cursor:not-allowed; }
+
+      /* ── Read-only display field ── */
+      .fld-display          { padding:10px 14px;background:var(--bg-card2);border:1.5px solid var(--border-light);border-radius:var(--radius-sm);font-family:var(--font-display);font-weight:700;font-size:14px;color:var(--text-primary); }
+      .fld-display-warn     { border-color:rgba(245,158,11,.4);color:#d97706;background:rgba(245,158,11,.06); }
+      .fld-display-ok       { border-color:rgba(16,185,129,.3);color:#059669;background:rgba(16,185,129,.06); }
+
+      /* ── Tipo tiles ── */
+      .tipo-tiles { display:flex;gap:10px;flex-wrap:wrap; }
+      .tipo-tile  { flex:1;min-width:80px;max-width:160px;border:2px solid var(--border-light);border-radius:12px;padding:14px 8px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;transition:.15s;background:var(--bg-card);user-select:none; }
+      .tipo-tile:hover { border-color:var(--accent);background:var(--accent-light);transform:translateY(-1px); }
+      .tipo-tile.active { border-color:var(--accent);background:var(--accent-light);box-shadow:0 0 0 3px rgba(59,99,217,.15); }
+      .tipo-tile[data-tipo="E"].active { border-color:#f59e0b;background:rgba(245,158,11,.08);box-shadow:0 0 0 3px rgba(245,158,11,.15); }
+      .tipo-tile[data-tipo="T"].active { border-color:#6366f1;background:rgba(99,102,241,.08);box-shadow:0 0 0 3px rgba(99,102,241,.15); }
+      .tipo-tile[data-tipo="P"].active { border-color:#7c3aed;background:rgba(124,58,237,.08);box-shadow:0 0 0 3px rgba(124,58,237,.15); }
+      .tipo-tile[data-tipo="N"].active { border-color:#059669;background:rgba(5,150,105,.08);box-shadow:0 0 0 3px rgba(5,150,105,.15); }
+      .tipo-tile-code { font-size:22px;font-weight:900;font-family:var(--font-display);color:var(--text-primary); }
+      .tipo-tile-name { font-size:11px;color:var(--text-muted);text-align:center;line-height:1.3; }
+      .tipo-hint   { display:flex;align-items:center;gap:6px;font-size:12px;margin-top:8px;padding:7px 12px;border-radius:8px; }
+      .hint-blue   { background:rgba(37,99,235,.08);color:#2563eb;border:1px solid rgba(37,99,235,.15); }
+      .hint-purple { background:rgba(124,58,237,.08);color:#7c3aed;border:1px solid rgba(124,58,237,.15); }
+      .hint-green  { background:rgba(5,150,105,.08);color:#059669;border:1px solid rgba(5,150,105,.15); }
+
+      /* ── Grids ── */
+      .emit-grid-2 { display:grid;grid-template-columns:1fr 1fr;    gap:20px; }
+      .emit-grid-3 { display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px; }
+      .emit-grid-4 { display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:20px; }
+      .emit-grid-5 { display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:20px; }
+      @media(max-width:720px) { .emit-grid-4 { grid-template-columns:1fr 1fr; } }
+      @media(max-width:640px) { .emit-grid-2,.emit-grid-3,.emit-grid-4,.emit-grid-5 { grid-template-columns:1fr; } }
+
+      /* ── Receptor ── */
+      .receptor-picker-row { display:flex;gap:12px;align-items:flex-end;margin-bottom:16px;flex-wrap:wrap; }
+      .receptor-picker-row > div { flex:1;min-width:220px; }
+      .cliente-chip { display:flex;align-items:center;gap:12px;padding:12px 16px;margin-bottom:16px;background:var(--accent-light);border:1.5px solid rgba(59,99,217,.2);border-radius:10px; }
+      .cliente-chip-avatar { width:36px;height:36px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;font-family:var(--font-display);flex-shrink:0; }
+      .receptor-divider { display:flex;align-items:center;gap:12px;margin:8px 0 20px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em; }
+      .receptor-divider::before,.receptor-divider::after { content:'';flex:1;height:1px;background:var(--border-light); }
+      .nuevo-cliente-panel { margin-bottom:16px;padding:16px 20px;background:var(--bg-card2);border:1px solid var(--border-light);border-radius:10px; }
+
+      /* ── Sub-section label ── */
+      .subsec-label { display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted); }
+
+      /* ── Conceptos ── */
+      .concepto-row { border-bottom:1px solid var(--border-light);padding:20px 24px; }
+      .concepto-row-hdr { display:flex;align-items:center;justify-content:space-between;margin-bottom:16px; }
+      .concepto-num { display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em; }
+      .concepto-importe-badge { font-family:var(--font-display);font-weight:900;font-size:16px;color:var(--accent);background:var(--accent-light);border:1px solid rgba(59,99,217,.2);padding:4px 12px;border-radius:20px; }
+      .concepto-fields { display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:16px 16px; }
+      @media(max-width:760px) { .concepto-fields { grid-template-columns:1fr 1fr; } }
+      @media(max-width:480px) { .concepto-fields { grid-template-columns:1fr; } }
+      .concepto-totals { padding:16px 24px;background:var(--bg-card2);border-top:2px solid var(--border-light);display:flex;flex-direction:column;align-items:flex-end; }
+      .concepto-totals-row  { display:flex;justify-content:space-between;align-items:center;padding:5px 0;font-size:13px;color:var(--text-secondary);width:260px; }
+      .concepto-totals-lbl  { color:var(--text-muted); }
+      .concepto-totals-val  { font-weight:600; }
+      .concepto-totals-grand { font-family:var(--font-display);font-size:20px;font-weight:900;color:var(--text-primary);border-top:2px solid var(--border-light);margin-top:6px;padding-top:10px; }
+
+      /* ── Catálogo ── */
+      .catalogo-conceptos   { padding:14px 20px;background:var(--bg-card2);border-bottom:1px solid var(--border-light); }
+      .catalogo-chip        { font-size:12px !important; }
+      .catalogo-chip-price  { color:var(--text-muted);margin-left:6px; }
+
+      /* ── Pago documentos ── */
+      .doc-pago-card { padding:16px 20px;margin-bottom:12px;background:var(--bg-card2);border:1px solid var(--border-light);border-radius:10px; }
+      .doc-pago-hdr  { display:flex;justify-content:space-between;align-items:center;margin-bottom:16px; }
+      .doc-pago-num  { font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em; }
+
+      /* ── Nómina rows ── */
+      .nomina-row { padding:14px 24px;border-bottom:1px solid var(--border-light); }
+      .nomina-row-grid { display:grid;gap:12px;align-items:end; }
+      .nomina-row-percepcion { grid-template-columns:2.2fr 0.7fr 1fr 1fr 1fr auto; }
+      .nomina-row-deduccion  { grid-template-columns:2.2fr 0.7fr 1fr 1fr auto; }
+      @media(max-width:860px) { .nomina-row-percepcion,.nomina-row-deduccion { grid-template-columns:1fr 1fr; } }
+      .nomina-totals { padding:10px 24px;background:var(--bg-card2);border-top:1px solid var(--border-light);display:flex;gap:24px;justify-content:flex-end;font-size:13px;color:var(--text-secondary); }
+
+      /* ── CFDI relacionados ── */
+      .relacionado-row { display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;padding:16px 24px;border-bottom:1px solid var(--border-light); }
+      .empty-state-sm  { padding:20px 24px;text-align:center;font-size:13px;color:var(--text-muted); }
+
+      /* ── Error panel ── */
+      .error-panel      { background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);border-radius:12px;padding:16px 20px; }
+      .error-panel-hdr  { display:flex;align-items:center;gap:10px;font-weight:700;font-size:14px;color:#dc2626;margin-bottom:10px; }
+      .error-panel-list { display:flex;flex-direction:column;gap:4px;padding-left:30px; }
+      .error-panel-item { display:flex;align-items:center;gap:4px;font-size:13px;color:#dc2626; }
+
+      /* ── Actions ── */
+      .emit-actions { display:flex;justify-content:space-between;align-items:center;gap:12px;padding-bottom:40px;flex-wrap:wrap; }
+
+      /* ── Field warn ── */
+      .field-warn { display:flex;align-items:center;gap:6px;padding:7px 11px;font-size:12px;color:var(--warning);background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:6px;margin-top:4px; }
+
+      /* ── Modal PDF ── */
+      .modal-overlay { position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px; }
+      .modal-pdf     { background:var(--bg-card);border-radius:16px;width:100%;max-width:900px;height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 32px 80px rgba(0,0,0,.4); }
+      .modal-pdf-hdr { display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border-light);flex-shrink:0; }
+      .modal-pdf-body { flex:1;overflow:hidden;background:#525659;display:flex;align-items:center;justify-content:center; }
+      .modal-pdf-footer { display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-top:1px solid var(--border-light);flex-shrink:0; }
+      .pdf-icon-badge { width:40px;height:40px;border-radius:10px;background:rgba(239,68,68,.1);color:#ef4444;display:flex;align-items:center;justify-content:center; }
+
+      /* ── Modal Plantilla ── */
+      .modal-card-plantilla { background:var(--bg-card);border-radius:16px;width:100%;max-width:480px;box-shadow:0 32px 80px rgba(0,0,0,.4); }
     </style>
   `
 })
@@ -1181,6 +1622,10 @@ export class CfdiEmitirComponent implements OnInit {
   subtotal = 0; iva = 0; total = 0;
 
   camposConError: string[] = [];
+
+  modoClonando = false;
+  modoEditando = false;
+  cargandoBase = false;
 
   mostrarPreview  = false;
   loadingPreview  = false;
@@ -1199,6 +1644,18 @@ export class CfdiEmitirComponent implements OnInit {
   mostrarAgregarCliente    = false;
   mostrarAgregarSerie      = false;
   mostrarCatalogoConceptos = false;
+
+  // Plantillas frecuentes
+  modalGuardarPlantilla = false;
+  plantillaNombre       = '';
+  plantillaDescripcion  = '';
+  guardandoPlantilla    = false;
+  plantillaGuardadaOk   = false;
+  plantillaError        = '';
+  plantillaCargada:     PlantillaCfdi | null = null;
+
+  // Cotización convertida
+  cotizacionCargada:    Cotizacion | null = null;
 
   nuevaSerie   = { serie: '', descripcion: '' };
   nuevoCliente = { rfc: '', nombre: '', usoCfdi: 'S01', regimenFiscal: '616', codigoPostal: '' };
@@ -1257,8 +1714,11 @@ export class CfdiEmitirComponent implements OnInit {
     private clienteSvc:     ClienteService,
     private serieSvc:       SerieService,
     private conceptoCatSvc: ConceptoCatalogoService,
-    private sanitizer:      DomSanitizer,
-    private router:         Router
+    private plantillaSvc:    PlantillaCfdiService,
+    private cotizacionSvc:   CotizacionService,
+    private sanitizer:       DomSanitizer,
+    private router:         Router,
+    private route:          ActivatedRoute
   ) {
     this.form = this.fb.group({
       rfcId:            ['', Validators.required],
@@ -1325,13 +1785,78 @@ export class CfdiEmitirComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.rfcSvc.listar().subscribe(rs => this.rfcs = rs);
+    // Pre-seleccionar tipo desde query param ?tipo=I/E/P/N/T
+    const tipoParam = this.route.snapshot.queryParamMap.get('tipo');
+    if (tipoParam && ['I','E','T','N','P'].includes(tipoParam)) {
+      this.form.get('tipoComprobante')!.setValue(tipoParam, { emitEvent: true });
+    }
+
+    // PPD → forma de pago siempre 99 (regla SAT)
+    this.form.get('metodoPago')!.valueChanges.subscribe(metodo => {
+      const formaPago = this.form.get('formaPago')!;
+      if (metodo === 'PPD') {
+        formaPago.setValue('99');
+      } else if (formaPago.value === '99') {
+        formaPago.setValue('03');
+      }
+    });
+
+    // Pre-seleccionar método de pago desde query param ?metodoPago=PPD|PUE
+    const metodoPagoParam = this.route.snapshot.queryParamMap.get('metodoPago');
+    if (metodoPagoParam && ['PPD','PUE'].includes(metodoPagoParam)) {
+      const ctrl = this.form.get('metodoPago');
+      if (ctrl?.enabled) ctrl.setValue(metodoPagoParam);
+    }
+
+    this.rfcSvc.listar().subscribe(rs => {
+      this.rfcs = rs;
+
+      // Clonar / editar — espera a que los RFC estén cargados para poder hacer onRfcChange
+      const clonarId    = this.route.snapshot.queryParamMap.get('clonarId');
+      const editarId    = this.route.snapshot.queryParamMap.get('editarId');
+      const plantillaId = this.route.snapshot.queryParamMap.get('plantillaId');
+      const sourceId    = clonarId ?? editarId;
+      if (sourceId) {
+        this.modoClonando = !!clonarId;
+        this.modoEditando = !!editarId;
+        this.cargandoBase = true;
+        this.cfdiSvc.obtener(+sourceId).subscribe({
+          next:  d => { this.prefillDesde(d); this.cargandoBase = false; },
+          error: () => { this.cargandoBase = false; }
+        });
+      } else if (plantillaId) {
+        this.cargandoBase = true;
+        this.plantillaSvc.obtener(+plantillaId).subscribe({
+          next: p => {
+            this.plantillaCargada = p;
+            try {
+              const datos = JSON.parse(p.datosJson);
+              this.prefillDesdePlantilla(datos);
+            } catch { /* JSON inválido, ignorar */ }
+            this.cargandoBase = false;
+          },
+          error: () => { this.cargandoBase = false; }
+        });
+      } else if (this.route.snapshot.queryParamMap.get('cotizacionId')) {
+        const cotId = +this.route.snapshot.queryParamMap.get('cotizacionId')!;
+        this.cargandoBase = true;
+        this.cotizacionSvc.obtener(cotId).subscribe({
+          next: c => {
+            this.cotizacionCargada = c;
+            this.prefillDesdeCotizacion(c);
+            this.cargandoBase = false;
+          },
+          error: () => { this.cargandoBase = false; }
+        });
+      }
+    });
+
     this.clienteSvc.listar().subscribe(cs => this.clientes = cs);
     this.conceptoCatSvc.listar().subscribe(cc => this.conceptosCatalogo = cc);
 
     this.nomina.get('tipoRegimen')!.valueChanges.subscribe(val => {
       if (val !== '02') return;
-      const yaExiste = this.otrosPagos.controls.some(c => c.get('tipoPago')?.value === '002');
+      const yaExiste       = this.otrosPagos.controls.some(c => c.get('tipoPago')?.value === '002');
       const tieneExcepcion = this.otrosPagos.controls.some(c => ['007', '008'].includes(c.get('tipoPago')?.value));
       if (!yaExiste && !tieneExcepcion) {
         this.otrosPagos.push(this.fb.group({
@@ -1340,6 +1865,49 @@ export class CfdiEmitirComponent implements OnInit {
         }));
       }
     });
+  }
+
+  prefillDesde(d: CfdiDetalle): void {
+    // 1. Activar el tipo correcto (dispara onTipoChange para habilitar/deshabilitar secciones)
+    this.form.get('tipoComprobante')!.setValue(d.tipoComprobante, { emitEvent: true });
+
+    setTimeout(() => {
+      // 2. Patch campos básicos
+      this.form.patchValue({
+        rfcId:          d.rfcId     ?? '',
+        serie:          d.serie     ?? '',
+        formaPago:      d.formaPago ?? '03',
+        metodoPago:     d.metodoPago ?? 'PUE',
+        moneda:         d.moneda    ?? 'MXN',
+        receptorRfc:    d.receptorRfc,
+        receptorNombre: d.receptorNombre,
+      });
+
+      // 3. Disparar cambio de RFC para cargar series y CP del emisor
+      this.onRfcChange();
+
+      // 4. Pre-llenar conceptos (sólo para I y E)
+      if (d.lineas?.length && d.tipoComprobante !== 'N' && d.tipoComprobante !== 'P') {
+        while (this.conceptos.length) this.conceptos.removeAt(0);
+        d.lineas.forEach(l => {
+          const tasaIva = l.importe > 0
+            ? Math.round((l.importeIva / l.importe) * 100) / 100
+            : 0.16;
+          const g = this.fb.group({
+            claveProdServ:  [l.claveProdServ,  Validators.required],
+            claveUnidad:    ['ACT',             Validators.required],
+            unidad:         ['Actividad'],
+            descripcion:    [l.descripcion,     Validators.required],
+            cantidad:       [l.cantidad,        [Validators.required, Validators.min(0.001)]],
+            precioUnitario: [l.precioUnitario,  [Validators.required, Validators.min(0.01)]],
+            descuento:      [l.descuento ?? 0],
+            tasaIva:        [tasaIva]
+          });
+          this.conceptos.push(g);
+        });
+        this.calcTotal();
+      }
+    }, 100);
   }
 
   // ── Getters ───────────────────────────────────────────────────
@@ -1704,7 +2272,7 @@ export class CfdiEmitirComponent implements OnInit {
   }
 
   // ── buildPayload ──────────────────────────────────────────────
-  private buildPayload(): any {
+  buildPayload(): any {
     const v   = this.form.getRawValue();
     const rel = (v.cfdiRelacionados ?? []).filter((r: any) => r.tipoRelacion && r.uuid);
 
@@ -1791,6 +2359,123 @@ export class CfdiEmitirComponent implements OnInit {
     };
   }
 
+  // ── Plantillas frecuentes ─────────────────────────────────────
+  abrirGuardarPlantilla(): void {
+    this.plantillaNombre      = '';
+    this.plantillaDescripcion = '';
+    this.plantillaGuardadaOk  = false;
+    this.plantillaError       = '';
+    this.modalGuardarPlantilla = true;
+  }
+
+  cerrarGuardarPlantilla(): void { this.modalGuardarPlantilla = false; }
+
+  guardarPlantilla(): void {
+    if (!this.plantillaNombre.trim()) return;
+    this.guardandoPlantilla   = true;
+    this.plantillaGuardadaOk  = false;
+    this.plantillaError       = '';
+    const datosJson = JSON.stringify(this.buildPayload());
+    this.plantillaSvc.crear({
+      nombre:      this.plantillaNombre.trim(),
+      descripcion: this.plantillaDescripcion.trim() || undefined,
+      datosJson
+    }).subscribe({
+      next: p => {
+        this.guardandoPlantilla  = false;
+        this.plantillaGuardadaOk = true;
+        this.plantillaCargada    = p;
+        setTimeout(() => this.cerrarGuardarPlantilla(), 1500);
+      },
+      error: (err: any) => {
+        this.guardandoPlantilla = false;
+        this.plantillaError = err.error?.error ?? 'Error al guardar la plantilla.';
+      }
+    });
+  }
+
+  prefillDesdePlantilla(datos: any): void {
+    if (datos.tipoComprobante) {
+      this.form.get('tipoComprobante')!.setValue(datos.tipoComprobante, { emitEvent: true });
+    }
+    setTimeout(() => {
+      this.form.patchValue({
+        rfcId:            datos.rfcId     ? String(datos.rfcId) : '',
+        serie:            datos.serie     ?? '',
+        formaPago:        datos.formaPago ?? '03',
+        metodoPago:       datos.metodoPago ?? 'PUE',
+        moneda:           datos.moneda    ?? 'MXN',
+        receptorRfc:      datos.receptorRfc    ?? '',
+        receptorNombre:   datos.receptorNombre ?? '',
+        receptorUsoCfdi:  datos.receptorUsoCfdi ?? 'S01',
+        receptorRegimen:  datos.receptorRegimen ?? '616',
+        receptorCp:       datos.receptorCp     ?? '',
+      });
+      this.onRfcChange();
+
+      if (datos.conceptos?.length && datos.tipoComprobante !== 'N' && datos.tipoComprobante !== 'P') {
+        while (this.conceptos.length) this.conceptos.removeAt(0);
+        datos.conceptos.forEach((c: any) => {
+          const g = this.fb.group({
+            claveProdServ:  [c.claveProdServ,  Validators.required],
+            claveUnidad:    [c.claveUnidad,     Validators.required],
+            unidad:         [c.unidad     ?? 'Servicio'],
+            descripcion:    [c.descripcion,     Validators.required],
+            cantidad:       [c.cantidad ?? 1,   [Validators.required, Validators.min(0.001)]],
+            precioUnitario: [c.precioUnitario,  [Validators.required, Validators.min(0.01)]],
+            descuento:      [c.descuento ?? 0],
+            tasaIva:        [c.tasaIva ?? 0.16]
+          });
+          this.conceptos.push(g);
+        });
+        this.calcTotal();
+      }
+    }, 100);
+  }
+
+  prefillDesdeCotizacion(c: Cotizacion): void {
+    // Tipo I (ingreso) para facturas de venta
+    this.form.get('tipoComprobante')!.setValue('I', { emitEvent: true });
+    setTimeout(() => {
+      this.form.patchValue({
+        receptorRfc:    c.receptorRfc,
+        receptorNombre: c.receptorNombre,
+        moneda:         c.moneda ?? 'MXN',
+        metodoPago:     'PUE',
+        formaPago:      '03'
+      });
+      // Pre-llenar RFC del receptor si hay cliente con ese RFC en la lista
+      const cliente = this.clientes.find(cl => cl.rfc === c.receptorRfc);
+      if (cliente) {
+        this.form.patchValue({
+          receptorUsoCfdi: cliente.usoCfdi ?? 'S01',
+          receptorRegimen: cliente.regimenFiscal ?? '616',
+          receptorCp:      cliente.codigoPostal ?? ''
+        });
+      }
+      this.onRfcChange();
+
+      // Conceptos
+      if (c.lineas?.length) {
+        while (this.conceptos.length) this.conceptos.removeAt(0);
+        c.lineas.forEach(l => {
+          const g = this.fb.group({
+            claveProdServ:  [l.claveProdServ,  Validators.required],
+            claveUnidad:    [l.claveUnidad,     Validators.required],
+            unidad:         [l.unidad ?? 'Servicio'],
+            descripcion:    [l.descripcion,     Validators.required],
+            cantidad:       [l.cantidad,        [Validators.required, Validators.min(0.001)]],
+            precioUnitario: [l.precioUnitario,  [Validators.required, Validators.min(0.01)]],
+            descuento:      [l.descuento ?? 0],
+            tasaIva:        [l.tasaIva ?? 0.16]
+          });
+          this.conceptos.push(g);
+        });
+        this.calcTotal();
+      }
+    }, 100);
+  }
+
   // ── Submit ────────────────────────────────────────────────────
   submit(): void {
     this.form.markAllAsTouched();
@@ -1801,8 +2486,17 @@ export class CfdiEmitirComponent implements OnInit {
       return;
     }
     this.loading = true; this.errorMsg = '';
-    this.cfdiSvc.emitir(this.buildPayload()).subscribe({
-      next:  () => this.router.navigate(['/cfdis']),
+    const returnTo     = this.route.snapshot.queryParamMap.get('returnTo');
+    const cotizacionId = this.cotizacionCargada?.id ?? null;
+    const payload      = { ...this.buildPayload(), cotizacionId };
+    this.cfdiSvc.emitir(payload).subscribe({
+      next: () => {
+        if (cotizacionId) {
+          this.router.navigate(['/cotizaciones', cotizacionId]);
+        } else {
+          this.router.navigate(returnTo === 'cuentas-cobrar' ? ['/cuentas-cobrar'] : ['/cfdis']);
+        }
+      },
       error: (err: any) => {
         this.loading  = false;
         this.errorMsg = err.error?.error ?? 'Error al timbrar el CFDI.';

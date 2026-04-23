@@ -11,7 +11,7 @@ import { FormsModule } from '@angular/forms';
   standalone: true,
   imports: [CommonModule, RouterModule, FormsModule],
   template: `
-    <div class="animate-in" style="max-width:1100px">
+    <div class="animate-in">
       <div style="margin-bottom:24px;display:flex;align-items:center;justify-content:space-between">
         <div>
           <h1 style="font-family:var(--font-display);font-size:22px;font-weight:800">Historial de Nómina</h1>
@@ -24,13 +24,18 @@ import { FormsModule } from '@angular/forms';
       </div>
 
       <!-- Filtro RFC -->
-      <div class="card-mag" style="margin-bottom:16px;padding:16px 20px">
-        <div style="display:flex;gap:12px;align-items:center">
-          <select class="form-control-mag" [(ngModel)]="rfcId" (change)="cargar()" style="max-width:320px">
-            <option [value]="0">Seleccionar RFC...</option>
-            <option *ngFor="let r of rfcs" [value]="r.id">{{ r.rfc }} — {{ r.razonSocial }}</option>
-          </select>
-          <span style="font-size:13px;color:var(--text-muted)">{{ lotes.length }} lote(s)</span>
+      <div class="card-mag" style="margin-bottom:16px">
+        <div class="card-body-mag" style="padding:12px 20px">
+          <div style="display:flex;gap:12px;align-items:center">
+            <div class="lf-sel-wrap" style="min-width:320px">
+              <select class="lf-ctrl" [(ngModel)]="rfcId" (change)="cargar()">
+                <option [value]="0">Seleccionar RFC...</option>
+                <option *ngFor="let r of rfcs" [value]="r.id">{{ r.rfc }} — {{ r.razonSocial }}</option>
+              </select>
+              <span class="material-icons-round lf-ico">expand_more</span>
+            </div>
+            <span style="font-size:13px;color:var(--text-muted)">{{ lotes.length }} lote(s)</span>
+          </div>
         </div>
       </div>
 
@@ -93,7 +98,14 @@ import { FormsModule } from '@angular/forms';
         </div>
       </div>
     </div>
-    <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+    <style>
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .lf-ctrl { height:38px; padding:0 12px; background:var(--bg-card2); border:1.5px solid var(--border); border-radius:6px; color:var(--text-primary); font-size:13px; outline:none; box-sizing:border-box; -webkit-appearance:none; appearance:none; transition:border-color .15s,box-shadow .15s; }
+      .lf-ctrl:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(59,99,217,.1); }
+      .lf-sel-wrap { position:relative; display:inline-flex; align-items:center; }
+      .lf-sel-wrap .lf-ctrl { padding-right:32px; width:100%; }
+      .lf-ico { position:absolute; right:8px; top:50%; transform:translateY(-50%); font-size:18px; color:var(--text-muted); pointer-events:none; }
+    </style>
   `
 })
 export class NominaLotesComponent implements OnInit {

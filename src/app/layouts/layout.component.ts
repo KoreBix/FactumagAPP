@@ -25,7 +25,7 @@ import { WizardOnboardingComponent } from '../features/onboarding/wizard.onboard
     <div class="app-container">
 
       <!-- Sidebar -->
-      <app-sidebar [open]="sidebarOpen" [desktopHidden]="!sidebarDesktopVisible" (closed)="sidebarOpen=false" />
+      <app-sidebar [open]="sidebarOpen" [collapsed]="sidebarCollapsed" (closed)="sidebarOpen=false" />
 
       <!-- Overlay móvil -->
       <div *ngIf="sidebarOpen"
@@ -33,7 +33,7 @@ import { WizardOnboardingComponent } from '../features/onboarding/wizard.onboard
            (click)="sidebarOpen=false"></div>
 
       <!-- Contenido principal -->
-      <div class="main-content" [class.sidebar-hidden]="!sidebarDesktopVisible">
+      <div class="main-content" [class.sidebar-collapsed]="sidebarCollapsed">
 
         <!-- Topbar -->
         <header class="topbar">
@@ -82,8 +82,8 @@ import { WizardOnboardingComponent } from '../features/onboarding/wizard.onboard
   `]
 })
 export class MainLayoutComponent implements OnInit {
-  sidebarOpen          = false;
-  sidebarDesktopVisible = true;
+  sidebarOpen      = false;
+  sidebarCollapsed = false;
   pageTitle     = 'Dashboard';
   showWizard    = false;
   isPerfilRoute = false;
@@ -100,13 +100,14 @@ export class MainLayoutComponent implements OnInit {
     '/clientes':   'Clientes',
     '/conceptos':  'Conceptos',
     '/empleados':  'Empleados',
-    '/nomina/generar': 'Generar Nómina',
-    '/nomina/lotes':   'Lotes de Nómina',
+    '/nomina/generar':   'Generar Nómina',
+    '/nomina/lotes':     'Lotes de Nómina',
+    '/cuentas-cobrar':   'Cuentas por Cobrar',
   };
 
   toggleSidebar(): void {
     if (window.innerWidth > 1024) {
-      this.sidebarDesktopVisible = !this.sidebarDesktopVisible;
+      this.sidebarCollapsed = !this.sidebarCollapsed;
     } else {
       this.sidebarOpen = !this.sidebarOpen;
     }

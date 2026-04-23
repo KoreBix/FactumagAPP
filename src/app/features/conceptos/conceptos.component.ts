@@ -40,7 +40,7 @@ import { ClienteListDto } from '../../core/models/cliente/ClienteListDto';
         </div>
         <div class="card-mag" style="cursor:default">
           <div class="card-body-mag" style="display:flex;align-items:center;gap:14px;padding:16px 20px">
-            <div style="width:42px;height:42px;border-radius:10px;background:rgba(20,184,166,.1);display:flex;align-items:center;justify-content:center">
+            <div style="width:42px;height:42px;border-radius:10px;background:rgba(59,99,217,.1);display:flex;align-items:center;justify-content:center">
               <span class="material-icons-round" style="color:var(--accent);font-size:20px">check_circle</span>
             </div>
             <div><div style="font-family:var(--font-display);font-size:24px;font-weight:800;color:var(--accent)">{{ activos }}</div>
@@ -61,24 +61,32 @@ import { ClienteListDto } from '../../core/models/cliente/ClienteListDto';
       <!-- Filtros -->
       <div class="card-mag animate-in delay-2" style="margin-bottom:16px">
         <div class="card-body-mag" style="padding:14px 20px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-          <div style="flex:1;min-width:180px;position:relative">
-            <span class="material-icons-round" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:17px;color:var(--text-muted)">search</span>
-            <input [(ngModel)]="busqueda" (input)="filtrar()" placeholder="Buscar..."
-                   style="width:100%;box-sizing:border-box;padding:8px 12px 8px 34px;background:var(--bg-card2);border:1.5px solid var(--border-light);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px;outline:none">
+          <div class="lf-search-wrap" style="flex:1;min-width:180px">
+            <span class="material-icons-round lf-search-ico">search</span>
+            <input class="lf-ctrl lf-search" [(ngModel)]="busqueda" (input)="filtrar()" placeholder="Buscar...">
           </div>
-          <select [(ngModel)]="filtroRfc" (change)="filtrar()" class="form-control-mag" style="width:200px;padding:8px 12px">
-            <option value="">Todos los emisores</option>
-            <option *ngFor="let r of rfcs" [value]="r.id">{{ r.rfc }}</option>
-          </select>
-          <select [(ngModel)]="filtroCliente" (change)="filtrar()" class="form-control-mag" style="width:220px;padding:8px 12px">
-            <option value="">Todos los clientes</option>
-            <option *ngFor="let c of clientes" [value]="c.id">{{ c.rfc }} — {{ c.nombre | slice:0:25 }}</option>
-          </select>
-          <select [(ngModel)]="filtroEstado" (change)="filtrar()" class="form-control-mag" style="width:130px;padding:8px 12px">
-            <option value="activos">Activos</option>
-            <option value="archivados">Archivados</option>
-            <option value="todos">Todos</option>
-          </select>
+          <div class="lf-sel-wrap" style="width:200px">
+            <select class="lf-ctrl" [(ngModel)]="filtroRfc" (change)="filtrar()">
+              <option value="">Todos los emisores</option>
+              <option *ngFor="let r of rfcs" [value]="r.id">{{ r.rfc }}</option>
+            </select>
+            <span class="material-icons-round lf-ico">expand_more</span>
+          </div>
+          <div class="lf-sel-wrap" style="width:220px">
+            <select class="lf-ctrl" [(ngModel)]="filtroCliente" (change)="filtrar()">
+              <option value="">Todos los clientes</option>
+              <option *ngFor="let c of clientes" [value]="c.id">{{ c.rfc }} — {{ c.nombre | slice:0:25 }}</option>
+            </select>
+            <span class="material-icons-round lf-ico">expand_more</span>
+          </div>
+          <div class="lf-sel-wrap" style="width:130px">
+            <select class="lf-ctrl" [(ngModel)]="filtroEstado" (change)="filtrar()">
+              <option value="activos">Activos</option>
+              <option value="archivados">Archivados</option>
+              <option value="todos">Todos</option>
+            </select>
+            <span class="material-icons-round lf-ico">expand_more</span>
+          </div>
         </div>
       </div>
 
@@ -189,6 +197,14 @@ import { ClienteListDto } from '../../core/models/cliente/ClienteListDto';
     <style>
       .th-col{padding:12px 20px;text-align:left;font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:.8px;text-transform:uppercase}
       @keyframes spin{to{transform:rotate(360deg)}}
+      .lf-ctrl { height:38px; padding:0 12px; background:var(--bg-card2); border:1.5px solid var(--border); border-radius:6px; color:var(--text-primary); font-size:13px; outline:none; box-sizing:border-box; -webkit-appearance:none; appearance:none; transition:border-color .15s,box-shadow .15s; width:100%; }
+      .lf-ctrl:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(59,99,217,.1); }
+      .lf-sel-wrap { position:relative; display:inline-flex; align-items:center; }
+      .lf-sel-wrap .lf-ctrl { padding-right:32px; }
+      .lf-ico { position:absolute; right:8px; top:50%; transform:translateY(-50%); font-size:18px; color:var(--text-muted); pointer-events:none; }
+      .lf-search-wrap { position:relative; display:flex; align-items:center; }
+      .lf-search-ico { position:absolute; left:10px; top:50%; transform:translateY(-50%); font-size:17px; color:var(--text-muted); pointer-events:none; }
+      .lf-search { padding-left:34px !important; }
     </style>
   `
 })
@@ -202,7 +218,7 @@ export class ConceptosComponent implements OnInit {
   page = 0; pageSize = 10;
   conceptoAEliminar: ConceptoCatalogoFullDto | null = null;
 
-  badgeOn  = 'background:rgba(20,184,166,.12);color:var(--accent);padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700';
+  badgeOn  = 'background:rgba(59,99,217,.12);color:var(--accent);padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700';
   badgeOff = 'background:rgba(100,100,100,.12);color:var(--text-muted);padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700';
 
   constructor(

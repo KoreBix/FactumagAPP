@@ -18,7 +18,7 @@ interface XmlPreview {
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, RouterModule, FormsModule],
   template: `
-    <div class="animate-in" style="max-width:720px">
+    <div class="animate-in">
 
       <!-- Header -->
       <div style="margin-bottom:24px">

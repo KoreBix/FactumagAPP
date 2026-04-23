@@ -39,6 +39,13 @@ export const routes: Routes = [
       { path: 'empleados/:id/editar', loadComponent: () => import('./features/empleados/empleado.form.component').then(m => m.EmpleadoFormComponent) },
       { path: 'nomina/generar',       loadComponent: () => import('./features/nomina-generar/nomina.generar.component').then(m => m.NominaGenerarComponent) },
       { path: 'nomina/lotes',         loadComponent: () => import('./features/nomina-generar/nomina.lotes.component').then(m => m.NominaLotesComponent) },
+      { path: 'cuentas-cobrar',     loadComponent: () => import('./features/cxc/cxc.component').then(m => m.CxcComponent) },
+      { path: 'cuentas-cobrar/:id', loadComponent: () => import('./features/cxc/cxc.detalle.component').then(m => m.CxcDetalleComponent) },
+      { path: 'plantillas-cfdi',    loadComponent: () => import('./features/plantillas-cfdi/plantillas-cfdi.component').then(m => m.PlantillasCfdiComponent) },
+      { path: 'cotizaciones',       loadComponent: () => import('./features/cotizaciones/cotizaciones.component').then(m => m.CotizacionesComponent) },
+      { path: 'cotizaciones/new',   loadComponent: () => import('./features/cotizaciones/cotizacion.form.component').then(m => m.CotizacionFormComponent) },
+      { path: 'cotizaciones/:id',         loadComponent: () => import('./features/cotizaciones/cotizacion.form.component').then(m => m.CotizacionFormComponent) },
+      { path: 'cotizaciones/:id/editar',  loadComponent: () => import('./features/cotizaciones/cotizacion.form.component').then(m => m.CotizacionFormComponent) },
       {
         path: 'sso/callback',
         loadComponent: () =>

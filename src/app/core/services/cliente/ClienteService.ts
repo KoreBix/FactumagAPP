@@ -39,5 +39,19 @@ export class ClienteService {
       xmlContent, omitirExistentes
     });
   }
+
+  importarMasivo(clientes: ImportarClienteItem[]): Observable<ImportarClienteMasivoResult[]> {
+    return this.http.post<ImportarClienteMasivoResult[]>(`${this.BASE}/importar-masivo`, { clientes });
+  }
+}
+
+export interface ImportarClienteItem {
+  rfc: string; nombre: string; regimenFiscal: string; usoCfdi: string; codigoPostal: string;
+  calle?: string; numExterior?: string; numInterior?: string; colonia?: string;
+  ciudad?: string; estado?: string; emails?: string; telefono?: string;
+  personaContacto?: string; notas?: string;
+}
+export interface ImportarClienteMasivoResult {
+  fila: number; rfc: string; exito: boolean; error?: string;
 }
 

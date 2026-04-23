@@ -12,7 +12,7 @@ import { RfcService } from '../../core/services/RFC/RfcService';
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, RouterModule],
   template: `
-    <div class="animate-in" style="max-width:600px">
+    <div class="animate-in">
 
       <div style="margin-bottom:24px">
         <a routerLink="/series" class="btn-mag btn-ghost btn-sm" style="margin-bottom:16px">
