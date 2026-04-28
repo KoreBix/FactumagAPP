@@ -74,6 +74,10 @@ export class RfcService {
     );
   }
 
+  setDefault(id: number): Observable<MessageResponse> {
+    return this.http.post<MessageResponse>(`${this.BASE}/${id}/set-default`, {});
+  }
+
   eliminarLogo(id: number): Observable<MessageResponse> {
     console.log(`${LOG} eliminarLogo — RFC #${id}`);
     return this.http.delete<MessageResponse>(`${this.BASE}/${id}/logo`).pipe(

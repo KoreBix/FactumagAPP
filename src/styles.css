@@ -433,6 +433,35 @@ h1, h2, h3, h4, h5, h6 {
       color: rgba(255,255,255,0.4);
       margin-top: 4px;
     }
+    .wallet-alerta-msg {
+      font-size: 11px;
+      color: #fcd34d;
+      margin-top: 6px;
+      font-weight: 500;
+    }
+    .wallet-comprar-btn {
+      display: block;
+      margin-top: 10px;
+      padding: 5px 10px;
+      border-radius: 6px;
+      background: rgba(59,99,217,0.25);
+      color: rgba(255,255,255,0.85);
+      font-size: 11px;
+      font-weight: 600;
+      text-align: center;
+      text-decoration: none;
+      transition: background 0.15s;
+    }
+    .wallet-comprar-btn:hover { background: rgba(59,99,217,0.45); }
+  }
+  .wallet-widget.wallet-alerta {
+    border-color: rgba(245,158,11,0.4);
+    background: rgba(245,158,11,0.08);
+    .wallet-comprar-btn {
+      background: rgba(245,158,11,0.25);
+      color: #fcd34d;
+    }
+    .wallet-comprar-btn:hover { background: rgba(245,158,11,0.45); }
   }
 }
 

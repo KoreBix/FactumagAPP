@@ -77,9 +77,16 @@ import { encodeId } from '../../core/utils/id-cipher';
                   </div>
                 </div>
               </div>
-              <span class="badge-mag" [class]="rfc.activo ? 'activo' : 'inactivo'">
-                {{ rfc.activo ? 'Activo' : 'Inactivo' }}
-              </span>
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+                <span class="badge-mag" [class]="rfc.activo ? 'activo' : 'inactivo'">
+                  {{ rfc.activo ? 'Activo' : 'Inactivo' }}
+                </span>
+                <span *ngIf="rfc.isDefault"
+                      style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:rgba(245,158,11,.12);color:#d97706;border:1px solid rgba(245,158,11,.3)">
+                  <span class="material-icons-round" style="font-size:12px">star</span>
+                  Predeterminado
+                </span>
+              </div>
             </div>
 
             <!-- Stats row -->
@@ -114,6 +121,15 @@ import { encodeId } from '../../core/utils/id-cipher';
                 <span class="material-icons-round" style="font-size:15px">receipt_long</span>
                 Facturar
               </a>
+              <button *ngIf="!rfc.isDefault"
+                      class="btn-mag btn-ghost btn-sm" style="justify-content:center"
+                      title="Marcar como RFC predeterminado"
+                      [disabled]="settingDefault === rfc.id"
+                      (click)="$event.stopPropagation(); setDefault(rfc.id)">
+                <span class="material-icons-round" style="font-size:15px">
+                  {{ settingDefault === rfc.id ? 'hourglass_empty' : 'star_outline' }}
+                </span>
+              </button>
             </div>
           </div>
         </div>
@@ -123,7 +139,8 @@ import { encodeId } from '../../core/utils/id-cipher';
 })
 export class RfcsComponent implements OnInit {
   rfcs: RfcList[] = [];
-  loading = true;
+  loading      = true;
+  settingDefault: number | null = null;
 
   encode = encodeId;
 
@@ -133,6 +150,17 @@ export class RfcsComponent implements OnInit {
     this.rfcSvc.listar().subscribe({
       next:  rfcs => { this.rfcs = rfcs; this.loading = false; },
       error: ()   => { this.loading = false; }
+    });
+  }
+
+  setDefault(id: number): void {
+    this.settingDefault = id;
+    this.rfcSvc.setDefault(id).subscribe({
+      next: () => {
+        this.rfcs = this.rfcs.map(r => ({ ...r, isDefault: r.id === id }));
+        this.settingDefault = null;
+      },
+      error: () => { this.settingDefault = null; }
     });
   }
 }

@@ -21,10 +21,16 @@ import { RfcService } from '../../core/services/RFC/RfcService';
           <h1>Mis CFDIs</h1>
           <p>{{ total }} comprobante{{ total !== 1 ? 's' : '' }} encontrado{{ total !== 1 ? 's' : '' }}</p>
         </div>
-        <a routerLink="/cfdis/new" class="btn-mag btn-primary">
-          <span class="material-icons-round" style="font-size:18px">add</span>
-          Emitir CFDI
-        </a>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <a routerLink="/cfdis/masivo" class="btn-mag btn-outline">
+            <span class="material-icons-round" style="font-size:18px">upload</span>
+            Carga masiva
+          </a>
+          <a routerLink="/cfdis/new" class="btn-mag btn-primary">
+            <span class="material-icons-round" style="font-size:18px">add</span>
+            Emitir CFDI
+          </a>
+        </div>
       </div>
 
       <!-- ── Filtros ── -->

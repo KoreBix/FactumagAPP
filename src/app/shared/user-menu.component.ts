@@ -56,6 +56,17 @@ import { environment } from '../../environments/environment';
             <span class="material-icons-round um-arrow">chevron_right</span>
           </button>
 
+          <button class="um-item" *ngIf="esOwnerOAdmin()" (click)="irEquipo()">
+            <span class="um-icon-wrap" style="background:#F0FDF4">
+              <span class="material-icons-round" style="color:#16A34A">group</span>
+            </span>
+            <span class="um-item-text">
+              <span class="um-item-label">Equipo & Accesos</span>
+              <span class="um-item-sub">Invita colaboradores y contadores</span>
+            </span>
+            <span class="material-icons-round um-arrow">chevron_right</span>
+          </button>
+
           <button class="um-item um-item-logout" (click)="logout()">
             <span class="um-icon-wrap" style="background:#FFF1F2">
               <span class="material-icons-round" style="color:#F43F5E">logout</span>
@@ -276,6 +287,11 @@ export class UserMenuComponent implements OnInit, OnDestroy {
     this.open.update(v => !v);
   }
 
+  esOwnerOAdmin(): boolean {
+    const rol = this.auth.currentUser()?.tenantRol?.toLowerCase() ?? '';
+    return rol === 'owner' || rol === 'admin';
+  }
+
   gestionarCuenta(): void {
     this.open.set(false);
     this.router.navigate(['/perfil']);
@@ -284,6 +300,11 @@ export class UserMenuComponent implements OnInit, OnDestroy {
   cambiarEmpresa(): void {
     this.open.set(false);
     window.location.href = `${environment.ssoUrl}/select-tenant`;
+  }
+
+  irEquipo(): void {
+    this.open.set(false);
+    this.router.navigate(['/equipo']);
   }
 
   logout(): void {

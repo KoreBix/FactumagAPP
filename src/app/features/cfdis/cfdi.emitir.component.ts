@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, FormGroup, FormArray, Validators, AbstractControl } from '@angular/forms';
 import { RouterModule, Router, ActivatedRoute } from '@angular/router';
+import { environment } from '../../../environments/environment';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { RfcList } from '../../core/models/RFC/RfcList';
@@ -25,6 +26,7 @@ import { PlantillaCfdiService } from '../../core/services/plantilla/PlantillaCfd
 import { PlantillaCfdi } from '../../core/models/plantilla/PlantillaCfdi';
 import { CotizacionService } from '../../core/services/cotizacion/CotizacionService';
 import { Cotizacion } from '../../core/models/cotizacion/Cotizacion';
+import { NotaDefaultService } from '../../core/services/nota-default.service';
 
 // ── Catálogos SAT para nómina ─────────────────────────────────────────────────
 const ENTIDADES_FEDERATIVAS = [
@@ -254,6 +256,8 @@ const PERIODICIDADES_PAGO = [
           <a routerLink="/plantillas-cfdi" class="btn-mag btn-ghost btn-sm">Ver plantillas</a>
         </div>
 
+        <div class="emit-layout">
+        <div class="emit-main">
         <div class="emit-sections">
 
           <!-- ══ 1: Configuración general ══════════════════════════════ -->
@@ -277,15 +281,45 @@ const PERIODICIDADES_PAGO = [
 
               <!-- RFC Emisor -->
               <div class="fg" style="grid-column:1/-1;margin-bottom:20px">
-                <label class="fl fl-req">RFC Emisor</label>
-                <div class="sel-wrap">
-                  <select formControlName="rfcId" class="form-control-mag"
-                          [class.error-field]="hasError('rfcId')" (change)="onRfcChange()">
-                    <option value="">— Seleccionar RFC emisor —</option>
-                    <option *ngFor="let r of rfcs" [value]="r.id">{{ r.rfc }} — {{ r.razonSocial }}</option>
-                  </select>
-                  <span class="material-icons-round sel-ico">expand_more</span>
+                <label class="fl fl-req" style="display:block;margin-bottom:6px">RFC Emisor</label>
+
+                <!-- RFC seleccionado → chip -->
+                <div *ngIf="rfcSeleccionado && !buscandoRfc" class="cliente-chip"
+                     style="border-color:rgba(124,58,237,.2);background:rgba(124,58,237,.05);margin-bottom:0">
+                  <div class="cliente-chip-avatar" style="background:#7c3aed">{{ rfcSeleccionado.razonSocial.charAt(0) }}</div>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-weight:700;font-size:14px">{{ rfcSeleccionado.razonSocial }}</div>
+                    <div style="font-size:11px;color:var(--text-muted);font-family:monospace">{{ rfcSeleccionado.rfc }}</div>
+                  </div>
+                  <button type="button" class="btn-mag btn-ghost btn-sm" (click)="abrirBusquedaRfc()"
+                          style="flex-shrink:0;gap:4px">
+                    <span class="material-icons-round" style="font-size:15px">edit</span>
+                    Cambiar
+                  </button>
                 </div>
+
+                <!-- Sin RFC o buscando → combobox -->
+                <div *ngIf="!rfcSeleccionado || buscandoRfc" class="cot-combo-wrap">
+                  <span class="material-icons-round cot-combo-icon">search</span>
+                  <input class="form-control-mag cot-combo-input"
+                         [(ngModel)]="busquedaRfc"
+                         [ngModelOptions]="{standalone:true}"
+                         [class.error-field]="hasError('rfcId')"
+                         placeholder="Escribe nombre o RFC para buscar..."
+                         autocomplete="off"
+                         (focus)="onRfcFocused()"
+                         (blur)="onRfcBlurred()"
+                         (ngModelChange)="filtrarRfcs()">
+                  <span class="material-icons-round cot-combo-arrow">expand_more</span>
+                  <div *ngIf="rfcsFiltrados.length > 0" class="clientes-dropdown">
+                    <div *ngFor="let r of rfcsFiltrados" class="clientes-dropdown-item"
+                         (mousedown)="seleccionarRfcCombo(r)">
+                      <span class="fld-mono" style="font-weight:700;font-size:12px;flex-shrink:0">{{ r.rfc }}</span>
+                      <span style="margin-left:8px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.razonSocial }}</span>
+                    </div>
+                  </div>
+                </div>
+
                 <div class="field-error" *ngIf="hasError('rfcId')">Selecciona un RFC</div>
                 <div *ngIf="rfcSeleccionado && !rfcSeleccionado.csdActivo" class="field-warn">
                   <span class="material-icons-round" style="font-size:14px">warning_amber</span>
@@ -1287,42 +1321,145 @@ const PERIODICIDADES_PAGO = [
             </div>
           </div>
 
-          <!-- ══ Error API ══ -->
-          <div *ngIf="errorMsg" class="error-panel">
-            <div class="error-panel-hdr" style="margin-bottom:0">
-              <span class="material-icons-round" style="font-size:20px">error_outline</span>
-              {{ errorMsg }}
+          <!-- § Notas y observaciones -->
+          <div class="emit-card animate-in">
+            <div class="emit-card-hdr">
+              <div class="emit-sec-num emit-sec-num-muted">
+                <span class="material-icons-round" style="font-size:16px">notes</span>
+              </div>
+              <div>
+                <div class="emit-sec-title">Notas y observaciones</div>
+                <div class="emit-sec-sub">Referencia interna — no se incluye en el XML fiscal <span class="optional-badge" style="margin-left:4px">opcional</span></div>
+              </div>
+              <button type="button" class="btn-mag btn-ghost btn-sm" style="margin-left:auto;gap:5px"
+                      (click)="editandoNotaDefault = !editandoNotaDefault"
+                      [title]="editandoNotaDefault ? 'Cerrar' : 'Configurar texto predeterminado'">
+                <span class="material-icons-round" style="font-size:16px">{{ editandoNotaDefault ? 'close' : 'settings' }}</span>
+                <span style="font-size:12px">{{ editandoNotaDefault ? 'Cerrar' : 'Predeterminado' }}</span>
+              </button>
+            </div>
+
+            <!-- Panel editar default -->
+            <div *ngIf="editandoNotaDefault" class="nota-default-panel">
+              <div class="nota-default-label">
+                <span class="material-icons-round" style="font-size:15px;color:var(--accent)">auto_awesome</span>
+                Texto predeterminado — se pre-llenará en todos los documentos nuevos
+              </div>
+              <textarea class="form-control-mag nota-default-textarea"
+                        [(ngModel)]="textoNotaDefault" name="textoNotaDefault" rows="3"
+                        placeholder="Ej: Precios + IVA. Vigencia 15 días. Pago a 30 días neto..."></textarea>
+              <div style="display:flex;gap:8px;margin-top:8px">
+                <button type="button" class="btn-mag btn-primary btn-sm" (click)="guardarNotaDefault()">
+                  <span class="material-icons-round" style="font-size:15px">save</span>
+                  Guardar como predeterminado
+                </button>
+                <button type="button" class="btn-mag btn-ghost btn-sm" (click)="aplicarNotaDefault()"
+                        *ngIf="textoNotaDefault">
+                  <span class="material-icons-round" style="font-size:15px">content_paste</span>
+                  Aplicar a este documento
+                </button>
+              </div>
+            </div>
+
+            <div class="emit-card-body">
+              <textarea class="form-control-mag" [(ngModel)]="observaciones" name="observaciones" rows="4"
+                        placeholder="Ej: Precio válido por 15 días. Condiciones de pago a 30 días..."></textarea>
             </div>
           </div>
 
-          <!-- ══ Acciones ══ -->
-          <div class="emit-actions">
-            <a routerLink="/cfdis" class="btn-mag btn-ghost btn-lg">
+        </div><!-- /emit-sections -->
+        </div><!-- /emit-main -->
+
+        <!-- ── Aside sticky: resumen + acciones ── -->
+        <aside class="emit-aside">
+
+          <!-- Resumen RFC + tipo -->
+          <div class="emit-aside-card">
+            <div class="aside-tipo-row">
+              <div class="aside-tipo-tile" [attr.data-tipo]="tipoActual">{{ tipoActual }}</div>
+              <div class="aside-tipo-info">
+                <div class="aside-tipo-label">{{ tipoLabel() }}</div>
+                <div class="aside-tipo-sub">CFDI 4.0</div>
+              </div>
+            </div>
+
+            <div *ngIf="rfcSeleccionado" class="aside-rfc-block">
+              <div class="aside-rfc-nombre">{{ rfcSeleccionado.razonSocial }}</div>
+              <div class="aside-rfc-clave">{{ rfcSeleccionado.rfc }}</div>
+              <div class="aside-timbres">
+                <span class="material-icons-round" style="font-size:13px">confirmation_number</span>
+                <span>{{ rfcSeleccionado.saldoTimbres | number }} timbres disponibles</span>
+              </div>
+              <div *ngIf="!rfcSeleccionado.csdActivo" class="aside-csd-warn">
+                <span class="material-icons-round" style="font-size:13px">warning_amber</span>
+                Sin CSD activo
+              </div>
+            </div>
+            <div *ngIf="!rfcSeleccionado" class="aside-empty-rfc">
+              <span class="material-icons-round" style="font-size:20px;color:var(--text-muted)">business</span>
+              <span>Selecciona un RFC emisor</span>
+            </div>
+
+            <!-- Total (solo para I/E/T) -->
+            <div *ngIf="tipoActual !== 'N' && tipoActual !== 'P' && total > 0" class="aside-total-block">
+              <div class="aside-total-row">
+                <span>Subtotal</span>
+                <span>{{ subtotal | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+              </div>
+              <div class="aside-total-row" *ngIf="iva > 0">
+                <span>IVA</span>
+                <span>{{ iva | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+              </div>
+              <div class="aside-total-grand">
+                <span>Total</span>
+                <span style="color:var(--accent)">{{ total | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Error API -->
+          <div *ngIf="errorMsg" class="error-panel">
+            <div class="error-panel-hdr" [style.margin-bottom]="esSaldoError ? '12px' : '0'">
+              <span class="material-icons-round" style="font-size:18px">error_outline</span>
+              {{ errorMsg }}
+            </div>
+            <div *ngIf="esSaldoError" style="display:flex;justify-content:flex-end;margin-top:10px">
+              <a [href]="walletUrl" target="_blank"
+                 style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;
+                        background:#3b63d9;color:#fff;border-radius:8px;font-size:13px;
+                        font-weight:600;text-decoration:none">
+                <span class="material-icons-round" style="font-size:15px">account_balance_wallet</span>
+                Comprar timbres →
+              </a>
+            </div>
+          </div>
+
+          <!-- Acciones -->
+          <div class="emit-aside-actions">
+            <button type="submit" class="btn-mag btn-primary btn-lg" style="width:100%;justify-content:center" [disabled]="loading">
+              <span *ngIf="loading" class="material-icons-round spin-anim" style="font-size:20px">refresh</span>
+              <span *ngIf="!loading" class="material-icons-round" style="font-size:20px">receipt</span>
+              {{ loading ? 'Timbrando...' : 'Timbrar CFDI' }}
+            </button>
+            <button type="button" class="btn-mag btn-outline btn-lg" style="width:100%;justify-content:center"
+                    (click)="verPreview()" [disabled]="loading || loadingPreview">
+              <span *ngIf="loadingPreview" class="material-icons-round spin-anim" style="font-size:20px">refresh</span>
+              <span *ngIf="!loadingPreview" class="material-icons-round" style="font-size:20px">picture_as_pdf</span>
+              {{ loadingPreview ? 'Generando...' : 'Vista previa' }}
+            </button>
+            <button type="button" class="btn-mag btn-ghost btn-lg" style="width:100%;justify-content:center"
+                    (click)="abrirGuardarPlantilla()" [disabled]="loading">
+              <span class="material-icons-round" style="font-size:18px">bookmark_add</span>
+              Guardar plantilla
+            </button>
+            <a routerLink="/cfdis" class="btn-mag btn-ghost btn-lg" style="width:100%;justify-content:center">
               <span class="material-icons-round" style="font-size:18px">arrow_back</span>
               Cancelar
             </a>
-            <div style="display:flex;gap:10px;flex-wrap:wrap">
-              <button type="button" class="btn-mag btn-ghost btn-lg"
-                      (click)="abrirGuardarPlantilla()" [disabled]="loading"
-                      title="Guardar configuración como plantilla frecuente">
-                <span class="material-icons-round" style="font-size:18px">bookmark_add</span>
-                Guardar plantilla
-              </button>
-              <button type="button" class="btn-mag btn-outline btn-lg"
-                      (click)="verPreview()" [disabled]="loading || loadingPreview">
-                <span *ngIf="loadingPreview" class="material-icons-round spin-anim" style="font-size:20px">refresh</span>
-                <span *ngIf="!loadingPreview" class="material-icons-round" style="font-size:20px">picture_as_pdf</span>
-                {{ loadingPreview ? 'Generando...' : 'Vista previa' }}
-              </button>
-              <button type="submit" class="btn-mag btn-primary btn-lg" [disabled]="loading">
-                <span *ngIf="loading" class="material-icons-round spin-anim" style="font-size:20px">refresh</span>
-                <span *ngIf="!loading" class="material-icons-round" style="font-size:20px">receipt</span>
-                {{ loading ? 'Timbrando...' : 'Timbrar CFDI' }}
-              </button>
-            </div>
           </div>
 
-        </div>
+        </aside>
+        </div><!-- /emit-layout -->
       </form>
     </div>
 
@@ -1427,7 +1564,98 @@ const PERIODICIDADES_PAGO = [
       }
 
       /* ── Layout ── */
-      .emit-wrap  { max-width:960px; }
+      .emit-wrap  { max-width:none; padding-right:0; }
+
+      /* Two-column layout: main form + sticky aside */
+      .emit-layout {
+        display: grid;
+        grid-template-columns: 1fr 300px;
+        gap: 24px;
+        align-items: start;
+      }
+      .emit-main { min-width: 0; }
+
+      /* Sticky aside */
+      .emit-aside {
+        position: sticky;
+        top: 80px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      /* Aside summary card */
+      .emit-aside-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-light);
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 1px 4px rgba(0,0,0,.05);
+      }
+
+      /* Tipo row inside card */
+      .aside-tipo-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 16px;
+        border-bottom: 1px solid var(--border-light);
+        background: var(--bg-card2);
+      }
+      .aside-tipo-tile {
+        width: 44px; height: 44px; flex-shrink: 0;
+        border-radius: 10px;
+        display: flex; align-items: center; justify-content: center;
+        font-family: var(--font-display); font-size: 18px; font-weight: 900;
+        color: #fff; background: var(--accent);
+      }
+      .aside-tipo-tile[data-tipo="E"] { background: #f59e0b; }
+      .aside-tipo-tile[data-tipo="T"] { background: #6366f1; }
+      .aside-tipo-tile[data-tipo="P"] { background: #7c3aed; }
+      .aside-tipo-tile[data-tipo="N"] { background: #059669; }
+      .aside-tipo-label { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+      .aside-tipo-sub   { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+      /* RFC block */
+      .aside-rfc-block {
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--border-light);
+      }
+      .aside-rfc-nombre { font-size: 13px; font-weight: 700; color: var(--text-primary); margin-bottom: 2px; }
+      .aside-rfc-clave  { font-size: 11px; font-family: monospace; color: var(--text-muted); margin-bottom: 8px; }
+      .aside-timbres    { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--accent); }
+      .aside-csd-warn   { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #f59e0b; margin-top: 6px; }
+      .aside-empty-rfc  { padding: 16px; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted); border-bottom: 1px solid var(--border-light); }
+
+      /* Total block */
+      .aside-total-block {
+        padding: 14px 16px;
+      }
+      .aside-total-row {
+        display: flex; justify-content: space-between;
+        font-size: 13px; color: var(--text-secondary); padding: 3px 0;
+      }
+      .aside-total-grand {
+        display: flex; justify-content: space-between;
+        font-family: var(--font-display); font-size: 18px; font-weight: 900;
+        color: var(--text-primary);
+        border-top: 2px solid var(--border-light);
+        margin-top: 6px; padding-top: 10px;
+      }
+
+      /* Aside action buttons */
+      .emit-aside-actions {
+        display: flex; flex-direction: column; gap: 8px;
+      }
+
+      /* Responsive: stack on narrower viewports */
+      @media(max-width:1100px) {
+        .emit-layout { grid-template-columns: 1fr 260px; }
+      }
+      @media(max-width:860px) {
+        .emit-layout { grid-template-columns: 1fr; }
+        .emit-aside  { position: static; }
+      }
 
       /* ── Banners modo clon/edición ── */
       .base-loading { display:flex;align-items:center;gap:10px;padding:14px 18px;margin-bottom:16px;background:var(--bg-card2);border:1px solid var(--border-light);border-radius:10px;font-size:13px;color:var(--text-muted); }
@@ -1607,6 +1835,40 @@ const PERIODICIDADES_PAGO = [
 
       /* ── Modal Plantilla ── */
       .modal-card-plantilla { background:var(--bg-card);border-radius:16px;width:100%;max-width:480px;box-shadow:0 32px 80px rgba(0,0,0,.4); }
+
+      /* ── Panel nota predeterminada ── */
+      .nota-default-panel {
+        padding:16px 20px;
+        background:color-mix(in srgb, var(--accent) 5%, var(--bg-card2));
+        border-bottom:1px solid var(--border-light);
+        border-top:1px solid var(--border-light);
+      }
+      .nota-default-label {
+        display:flex;align-items:center;gap:6px;
+        font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+        color:var(--accent);margin-bottom:10px;
+      }
+      .nota-default-textarea { height:auto !important;padding:10px 12px !important;resize:vertical; }
+
+      /* ── RFC / cliente combobox ── */
+      .cot-combo-wrap  { position:relative; }
+      .cot-combo-icon  { position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:18px !important;color:var(--text-muted);pointer-events:none;z-index:1; }
+      .cot-combo-arrow { position:absolute;right:11px;top:50%;transform:translateY(-50%);font-size:18px !important;color:var(--text-muted);pointer-events:none;z-index:1; }
+      .cot-combo-input { padding-left:36px !important;padding-right:36px !important; }
+      .clientes-dropdown {
+        position:absolute;top:calc(100% + 4px);left:0;right:0;
+        background:var(--bg-card);border:1px solid var(--border-light);
+        border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);
+        z-index:200;max-height:240px;overflow-y:auto;
+      }
+      .clientes-dropdown-item {
+        display:flex;align-items:center;
+        padding:10px 14px;font-size:13px;cursor:pointer;
+        border-bottom:1px solid var(--border-light);transition:background .1s;
+        overflow:hidden;
+      }
+      .clientes-dropdown-item:last-child { border-bottom:none; }
+      .clientes-dropdown-item:hover      { background:var(--hover-bg); }
     </style>
   `
 })
@@ -1621,11 +1883,21 @@ export class CfdiEmitirComponent implements OnInit {
   errorMsg = '';
   subtotal = 0; iva = 0; total = 0;
 
+  readonly walletUrl = `${environment.principalLoginUrl}/wallet`;
+  get esSaldoError(): boolean {
+    const m = this.errorMsg.toLowerCase();
+    return m.includes('timbre') || m.includes('saldo') || m.includes('bolsa');
+  }
+
   camposConError: string[] = [];
 
   modoClonando = false;
   modoEditando = false;
   cargandoBase = false;
+
+  observaciones        = '';
+  editandoNotaDefault  = false;
+  textoNotaDefault     = '';
 
   mostrarPreview  = false;
   loadingPreview  = false;
@@ -1640,6 +1912,9 @@ export class CfdiEmitirComponent implements OnInit {
 
   rfcSeleccionado:     RfcList | null = null;
   clienteSeleccionado: Cliente | null = null;
+  busquedaRfc      = '';
+  buscandoRfc      = false;
+  rfcsFiltrados:   RfcList[] = [];
 
   mostrarAgregarCliente    = false;
   mostrarAgregarSerie      = false;
@@ -1718,7 +1993,8 @@ export class CfdiEmitirComponent implements OnInit {
     private cotizacionSvc:   CotizacionService,
     private sanitizer:       DomSanitizer,
     private router:         Router,
-    private route:          ActivatedRoute
+    private route:          ActivatedRoute,
+    private notaSvc:        NotaDefaultService
   ) {
     this.form = this.fb.group({
       rfcId:            ['', Validators.required],
@@ -1785,11 +2061,27 @@ export class CfdiEmitirComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    // Pre-seleccionar tipo desde query param ?tipo=I/E/P/N/T
-    const tipoParam = this.route.snapshot.queryParamMap.get('tipo');
-    if (tipoParam && ['I','E','T','N','P'].includes(tipoParam)) {
-      this.form.get('tipoComprobante')!.setValue(tipoParam, { emitEvent: true });
-    }
+    // Pre-llenar notas — localStorage inmediato, luego API
+    this.textoNotaDefault = this.notaSvc.getCached();
+    this.observaciones    = this.notaSvc.getCached();
+    this.notaSvc.loadFromApi().subscribe(v => {
+      this.textoNotaDefault = v;
+      if (!this.observaciones) this.observaciones = v;
+    });
+
+    // Reacciona a cambios de ?tipo= y ?metodoPago= en cada navegación
+    // (queryParamMap es observable — se actualiza aunque Angular reutilice la instancia)
+    this.route.queryParamMap.subscribe(params => {
+      const tipoParam = params.get('tipo');
+      if (tipoParam && ['I','E','T','N','P'].includes(tipoParam)) {
+        this.form.get('tipoComprobante')!.setValue(tipoParam, { emitEvent: true });
+      }
+      const metodoPagoParam = params.get('metodoPago');
+      if (metodoPagoParam && ['PPD','PUE'].includes(metodoPagoParam)) {
+        const ctrl = this.form.get('metodoPago');
+        if (ctrl?.enabled) ctrl.setValue(metodoPagoParam);
+      }
+    });
 
     // PPD → forma de pago siempre 99 (regla SAT)
     this.form.get('metodoPago')!.valueChanges.subscribe(metodo => {
@@ -1801,15 +2093,17 @@ export class CfdiEmitirComponent implements OnInit {
       }
     });
 
-    // Pre-seleccionar método de pago desde query param ?metodoPago=PPD|PUE
-    const metodoPagoParam = this.route.snapshot.queryParamMap.get('metodoPago');
-    if (metodoPagoParam && ['PPD','PUE'].includes(metodoPagoParam)) {
-      const ctrl = this.form.get('metodoPago');
-      if (ctrl?.enabled) ctrl.setValue(metodoPagoParam);
-    }
-
     this.rfcSvc.listar().subscribe(rs => {
       this.rfcs = rs;
+
+      // Auto-seleccionar RFC predeterminado o único si el campo está vacío
+      if (!this.form.get('rfcId')?.value) {
+        const def = rs.find(r => r.isDefault) ?? (rs.length === 1 ? rs[0] : null);
+        if (def) {
+          this.form.get('rfcId')!.setValue(String(def.id));
+          this.onRfcChange();
+        }
+      }
 
       // Clonar / editar — espera a que los RFC estén cargados para poder hacer onRfcChange
       const clonarId    = this.route.snapshot.queryParamMap.get('clonarId');
@@ -1912,6 +2206,18 @@ export class CfdiEmitirComponent implements OnInit {
 
   // ── Getters ───────────────────────────────────────────────────
   get tipoActual(): string     { return this.form.get('tipoComprobante')?.value ?? 'I'; }
+  tipoLabel(): string {
+    const map: Record<string, string> = { I:'Factura de Ingreso', E:'Nota de Crédito', T:'Traslado', P:'Complemento de Pago', N:'Nómina' };
+    return map[this.tipoActual] ?? 'Comprobante';
+  }
+
+  guardarNotaDefault(): void {
+    this.notaSvc.save(this.textoNotaDefault).subscribe();
+    this.editandoNotaDefault = false;
+  }
+  aplicarNotaDefault(): void {
+    this.observaciones = this.textoNotaDefault;
+  }
   get conceptos():    FormArray { return this.form.get('conceptos')          as FormArray; }
   get relacionados(): FormArray { return this.form.get('cfdiRelacionados')   as FormArray; }
   get nomina():       FormGroup { return this.form.get('complementoNomina')  as FormGroup; }
@@ -2119,6 +2425,46 @@ export class CfdiEmitirComponent implements OnInit {
   addRelacionado():             void { this.relacionados.push(this.newRelacionado()); }
   removeRelacionado(i: number): void { this.relacionados.removeAt(i); }
 
+  // ── RFC combobox ──────────────────────────────────────────────
+  abrirBusquedaRfc(): void {
+    this.buscandoRfc   = true;
+    this.busquedaRfc   = '';
+    this.rfcsFiltrados = this.rfcs.slice(0, 10);
+  }
+
+  onRfcFocused(): void {
+    const txt = this.busquedaRfc.toLowerCase().trim();
+    this.rfcsFiltrados = txt ? this.rfcs.filter(r =>
+      r.rfc.toLowerCase().includes(txt) || r.razonSocial.toLowerCase().includes(txt)
+    ).slice(0, 10) : this.rfcs.slice(0, 10);
+  }
+
+  onRfcBlurred(): void {
+    setTimeout(() => {
+      this.rfcsFiltrados = [];
+      if (this.rfcSeleccionado) {
+        this.buscandoRfc = false;
+        this.busquedaRfc = '';
+      }
+    }, 200);
+  }
+
+  filtrarRfcs(): void {
+    const txt = this.busquedaRfc.toLowerCase().trim();
+    if (!txt) { this.rfcsFiltrados = this.rfcs.slice(0, 10); return; }
+    this.rfcsFiltrados = this.rfcs
+      .filter(r => r.rfc.toLowerCase().includes(txt) || r.razonSocial.toLowerCase().includes(txt))
+      .slice(0, 10);
+  }
+
+  seleccionarRfcCombo(r: RfcList): void {
+    this.form.get('rfcId')!.setValue(String(r.id));
+    this.busquedaRfc   = '';
+    this.rfcsFiltrados = [];
+    this.buscandoRfc   = false;
+    this.onRfcChange();
+  }
+
   onRfcChange(): void {
     const id = +this.form.get('rfcId')!.value;
     this.rfcSeleccionado = this.rfcs.find(r => r.id === id) ?? null;
@@ -2229,7 +2575,19 @@ export class CfdiEmitirComponent implements OnInit {
       tasaIva:        [tasaIva]
     });
     if (this.tipoActual === 'N' || this.tipoActual === 'P') g.disable();
-    this.conceptos.push(g);
+
+    // Si hay exactamente un concepto vacío (placeholder inicial), reemplazarlo
+    const esPlaceholder =
+      this.conceptos.length === 1 &&
+      !this.conceptos.at(0).get('descripcion')?.value &&
+      !(this.conceptos.at(0).get('precioUnitario')?.value > 0);
+
+    if (esPlaceholder) {
+      this.conceptos.setControl(0, g);
+    } else {
+      this.conceptos.push(g);
+    }
+
     this.calcTotal();
     this.mostrarCatalogoConceptos = false;
   }

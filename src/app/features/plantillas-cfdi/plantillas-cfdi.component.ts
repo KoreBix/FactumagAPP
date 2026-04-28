@@ -35,8 +35,23 @@ import { PlantillaCfdiService } from '../../core/services/plantilla/PlantillaCfd
             </div>
           </div>
 
+          <div class="lf-group">
+            <label class="lf-lbl">Tipo</label>
+            <div class="lf-sel-wrap">
+              <select [(ngModel)]="filtroTipo" class="lf-ctrl" (change)="aplicarFiltros()">
+                <option value="">Todos</option>
+                <option value="I">Ingreso</option>
+                <option value="E">Egreso</option>
+                <option value="T">Traslado</option>
+                <option value="N">Nómina</option>
+                <option value="P">C. Pago</option>
+              </select>
+              <span class="material-icons-round lf-ico">expand_more</span>
+            </div>
+          </div>
+
           <button class="btn-mag btn-ghost btn-sm lf-reset"
-                  (click)="filtroTexto=''; aplicarFiltros()">
+                  (click)="resetFiltros()">
             <span class="material-icons-round" style="font-size:16px">refresh</span>
             Limpiar
           </button>
@@ -49,12 +64,15 @@ import { PlantillaCfdiService } from '../../core/services/plantilla/PlantillaCfd
 
         <!-- Skeleton -->
         <div *ngIf="cargando" style="padding:4px 0">
-          <div *ngFor="let i of [1,2,3]" class="skeleton-row">
-            <div class="skeleton" style="width:140px;height:24px;border-radius:20px;flex-shrink:0"></div>
-            <div class="skeleton" style="flex:1;height:16px;border-radius:6px"></div>
-            <div class="skeleton" style="width:70px;height:22px;border-radius:20px"></div>
-            <div class="skeleton" style="width:90px;height:16px;border-radius:6px"></div>
-            <div class="skeleton" style="width:130px;height:32px;border-radius:8px"></div>
+          <div *ngFor="let i of [1,2,3,4,5]" class="skeleton-row">
+            <div class="skeleton" style="width:60px;height:26px;border-radius:6px;flex-shrink:0"></div>
+            <div style="flex:1">
+              <div class="skeleton" style="height:12px;width:40%;margin-bottom:6px;border-radius:4px"></div>
+              <div class="skeleton" style="height:10px;width:25%;border-radius:4px"></div>
+            </div>
+            <div class="skeleton" style="height:12px;width:100px;border-radius:4px"></div>
+            <div class="skeleton" style="height:24px;width:80px;border-radius:20px"></div>
+            <div class="skeleton" style="height:28px;width:100px;border-radius:8px"></div>
           </div>
         </div>
 
@@ -63,272 +81,269 @@ import { PlantillaCfdiService } from '../../core/services/plantilla/PlantillaCfd
           <div class="empty-icon">
             <span class="material-icons-round">bookmark_border</span>
           </div>
-          <div class="empty-title">No hay plantillas</div>
+          <div class="empty-title">Sin plantillas</div>
           <div class="empty-desc">
             {{ plantillas.length === 0
               ? 'Desde el formulario de emisión de CFDI puedes guardar cualquier configuración como plantilla.'
-              : 'Ninguna plantilla coincide con el filtro.' }}
+              : 'No hay plantillas que coincidan con el filtro.' }}
           </div>
         </div>
 
-        <!-- Tabla de datos -->
-        <table *ngIf="!cargando && filtradas.length > 0" class="plnt-table">
-          <thead>
-            <tr>
-              <th>Nombre</th>
-              <th class="hide-sm">Descripción</th>
-              <th>Tipo</th>
-              <th class="hide-sm">Actualizada</th>
-              <th style="text-align:right">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let p of filtradas; let odd=odd" [class.row-odd]="odd">
+        <!-- Data -->
+        <div *ngIf="!cargando && filtradas.length > 0" style="overflow-x:auto">
+          <table class="cfdis-table">
+            <thead>
+              <tr>
+                <th>Tipo</th>
+                <th>Nombre</th>
+                <th>Descripción</th>
+                <th>Actualizada</th>
+                <th class="col-actions">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let p of filtradas" class="cfdi-row" (click)="editarNombre(p)" title="Click para editar">
 
-              <td>
-                <div class="plnt-badge">
-                  <span class="material-icons-round" style="font-size:14px">bookmark</span>
-                  {{ p.nombre }}
-                </div>
-              </td>
+                <td>
+                  <span class="tipo-badge"
+                        [style.background]="tipoColor(p).bg"
+                        [style.color]="tipoColor(p).text">
+                    {{ tipoKey(p) }}
+                    <span class="tipo-badge-name">{{ tipoLabel(p) }}</span>
+                  </span>
+                </td>
 
-              <td class="hide-sm">
-                <span class="td-muted">{{ p.descripcion || '—' }}</span>
-              </td>
+                <td>
+                  <div class="receptor-name">{{ p.nombre }}</div>
+                </td>
 
-              <td>
-                <span class="tipo-chip tipo-{{ tipoColor(p) }}">{{ tipoLabel(p) }}</span>
-              </td>
+                <td>
+                  <div class="receptor-rfc" style="font-family:inherit;font-size:12px">
+                    {{ p.descripcion || '—' }}
+                  </div>
+                </td>
 
-              <td class="hide-sm">
-                <span class="td-muted">{{ p.updatedAt | date:'dd/MM/yyyy' }}</span>
-              </td>
+                <td class="col-fecha">
+                  {{ p.updatedAt | date:'dd/MM/yy HH:mm' }}
+                </td>
 
-              <td>
-                <div class="row-acts">
-                  <button class="act-btn act-use" (click)="usar(p)" title="Emitir con esta plantilla">
-                    <span class="material-icons-round" style="font-size:14px">flash_on</span>
-                    Usar
-                  </button>
-                  <button class="act-btn act-edit" (click)="editarNombre(p)" title="Editar">
-                    <span class="material-icons-round" style="font-size:14px">edit</span>
-                  </button>
-                  <button class="act-btn act-del" (click)="confirmarEliminar(p)" title="Eliminar">
-                    <span class="material-icons-round" style="font-size:14px">delete</span>
-                  </button>
-                </div>
-              </td>
+                <td class="col-actions" (click)="$event.stopPropagation()">
+                  <div class="action-btns">
 
-            </tr>
-          </tbody>
-        </table>
+                    <button class="act-btn act-use" title="Emitir CFDI con esta plantilla"
+                            (click)="usar(p)">
+                      <span class="material-icons-round">flash_on</span>
+                    </button>
 
-      </div>
+                    <button class="act-btn act-edit" title="Editar nombre y descripción"
+                            (click)="editarNombre(p)">
+                      <span class="material-icons-round">edit</span>
+                    </button>
 
-      <!-- ════════════════════════════════════════════════
-           MODAL EDITAR
-      ════════════════════════════════════════════════ -->
-      <div *ngIf="modalEditar" class="mod-overlay" (click)="cerrarEditar()">
-        <div class="mod-card" (click)="$event.stopPropagation()">
+                    <button class="act-btn act-cancel" title="Eliminar plantilla"
+                            (click)="confirmarEliminar(p)">
+                      <span class="material-icons-round">delete</span>
+                    </button>
 
-          <div class="mod-hdr">
-            <div class="mod-icon-wrap" style="background:rgba(217,119,6,.1)">
-              <span class="material-icons-round" style="color:#d97706;font-size:20px">edit</span>
-            </div>
-            <div style="flex:1;min-width:0">
-              <div class="mod-title">Editar plantilla</div>
-              <div class="mod-sub">Actualiza el nombre y descripción</div>
-            </div>
-            <button class="mod-close" (click)="cerrarEditar()">
-              <span class="material-icons-round">close</span>
-            </button>
-          </div>
+                  </div>
+                </td>
 
-          <div class="mod-body">
-            <div class="mod-fg">
-              <label class="mod-lbl">Nombre <span style="color:#f87171">*</span></label>
-              <input class="mod-input" [(ngModel)]="editNombre" maxlength="100"
-                     placeholder="Ej: Factura mensual servicios"
-                     (keydown.enter)="guardarEdicion()">
-            </div>
-            <div class="mod-fg" style="margin-bottom:0">
-              <label class="mod-lbl">
-                Descripción
-                <span style="color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0"> — opcional</span>
-              </label>
-              <input class="mod-input" [(ngModel)]="editDescripcion" maxlength="300"
-                     placeholder="Descripción breve para identificarla">
-            </div>
-          </div>
-
-          <div class="mod-ftr">
-            <button class="btn-mag btn-ghost" (click)="cerrarEditar()">Cancelar</button>
-            <button class="btn-mag btn-primary"
-                    (click)="guardarEdicion()"
-                    [disabled]="!editNombre.trim() || guardandoEdicion">
-              <span *ngIf="guardandoEdicion" class="material-icons-round spin-ico" style="font-size:16px">refresh</span>
-              Guardar cambios
-            </button>
-          </div>
-
+              </tr>
+            </tbody>
+          </table>
         </div>
-      </div>
 
-      <!-- ════════════════════════════════════════════════
-           MODAL ELIMINAR
-      ════════════════════════════════════════════════ -->
-      <div *ngIf="modalEliminar" class="mod-overlay" style="z-index:1002" (click)="cerrarEliminar()">
-        <div class="mod-card mod-sm" (click)="$event.stopPropagation()">
-
-          <div class="mod-hdr">
-            <div class="mod-icon-wrap" style="background:rgba(220,38,38,.1)">
-              <span class="material-icons-round" style="color:#dc2626;font-size:20px">delete_forever</span>
-            </div>
-            <div style="flex:1;min-width:0">
-              <div class="mod-title">Eliminar plantilla</div>
-              <div class="mod-sub">Esta acción no se puede deshacer</div>
-            </div>
-            <button class="mod-close" (click)="cerrarEliminar()">
-              <span class="material-icons-round">close</span>
-            </button>
-          </div>
-
-          <div class="mod-body">
-            <div class="mod-name-box">
-              <span class="material-icons-round" style="font-size:16px;color:var(--accent)">bookmark</span>
-              {{ plantillaAEliminar?.nombre }}
-            </div>
-            <p style="font-size:13px;color:var(--text-muted);margin:14px 0 0">
-              ¿Confirmas que deseas eliminar esta plantilla? No podrás recuperarla.
-            </p>
-          </div>
-
-          <div class="mod-ftr">
-            <button class="btn-mag btn-ghost" (click)="cerrarEliminar()">Cancelar</button>
-            <button class="mod-btn-del" (click)="eliminar()" [disabled]="eliminando">
-              <span *ngIf="eliminando" class="material-icons-round spin-ico" style="font-size:16px">refresh</span>
-              <span *ngIf="!eliminando" class="material-icons-round" style="font-size:16px">delete</span>
-              Eliminar
-            </button>
-          </div>
-
-        </div>
       </div>
 
     </div>
-  `,
-  styles: [`
-    /* ── Layout ── */
-    .list-wrap { padding:28px 24px; max-width:1200px; margin:0 auto; }
-    .list-ph   { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:24px; gap:16px; flex-wrap:wrap; }
-    .list-ph h1 { font-size:22px; font-weight:800; margin:0 0 4px; color:var(--text-primary); }
-    .list-ph p  { font-size:13px; color:var(--text-muted); margin:0; }
-    .list-card  { background:var(--bg-card); border:1px solid var(--border-light); border-radius:14px; overflow:hidden; }
 
-    /* ── Filters ── */
-    .list-filters { display:flex; align-items:flex-end; gap:12px; padding:16px 20px; flex-wrap:wrap; }
-    .lf-group     { display:flex; flex-direction:column; gap:5px; }
-    .lf-search    { flex:1; min-width:180px; }
-    .lf-lbl       { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted); }
-    .lf-ctrl      { padding:8px 12px; border-radius:8px; border:1px solid var(--border-light); background:var(--bg-input,var(--bg-card2)); color:var(--text-primary); font-size:13px; width:100%; box-sizing:border-box; }
-    .lf-ctrl:focus { outline:none; border-color:var(--accent); }
-    .lf-reset     { align-self:flex-end; }
+    <!-- ══════════════════════════════════════════════════════════════
+         Modal Editar
+    ══════════════════════════════════════════════════════════════ -->
+    <div *ngIf="modalEditar" class="modal-overlay" (click)="cerrarEditar()">
+      <div class="cancel-modal" style="max-width:500px" (click)="$event.stopPropagation()">
 
-    /* ── Skeleton ── */
-    .skeleton-row { display:flex; align-items:center; gap:16px; padding:14px 20px; border-bottom:1px solid var(--border-light); }
-    .skeleton-row:last-child { border-bottom:none; }
-    .skeleton { background:var(--border-light); border-radius:4px; animation:skel 1.4s ease-in-out infinite; }
-    @keyframes skel { 0%,100%{opacity:.5} 50%{opacity:1} }
+        <div class="cancel-modal-hdr">
+          <div class="cancel-icon-wrap" style="background:rgba(217,119,6,.1);color:#d97706">
+            <span class="material-icons-round" style="font-size:22px">edit</span>
+          </div>
+          <div>
+            <div style="font-size:15px;font-weight:700;color:var(--text-primary)">Editar plantilla</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:2px">
+              Actualiza el nombre y descripción
+            </div>
+          </div>
+        </div>
 
-    /* ── Empty ── */
-    .empty-state { text-align:center; padding:60px 20px; display:flex; flex-direction:column; align-items:center; gap:10px; }
-    .empty-icon  { width:56px; height:56px; border-radius:50%; background:var(--bg-card2); display:flex; align-items:center; justify-content:center; }
-    .empty-icon .material-icons-round { font-size:28px; color:var(--text-muted); }
-    .empty-title { font-size:15px; font-weight:700; color:var(--text-primary); }
-    .empty-desc  { font-size:13px; color:var(--text-muted); max-width:380px; line-height:1.6; }
+        <div style="margin-bottom:16px">
+          <label class="modal-field-lbl" for="ed-nombre">Nombre <span style="color:#f87171">*</span></label>
+          <input id="ed-nombre" class="lf-ctrl" [(ngModel)]="editNombre"
+                 maxlength="100" placeholder="Ej: Factura mensual servicios"
+                 (keydown.enter)="guardarEdicion()"
+                 style="height:40px">
+        </div>
 
-    /* ── Table ── */
-    .plnt-table { width:100%; border-collapse:collapse; }
-    .plnt-table thead tr { background:var(--bg-card2); border-bottom:2px solid var(--border-light); }
-    .plnt-table th { padding:11px 16px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted); text-align:left; white-space:nowrap; }
-    .plnt-table th:first-child { padding-left:20px; }
-    .plnt-table th:last-child  { padding-right:20px; text-align:right; }
-    .plnt-table td { padding:13px 16px; font-size:13px; color:var(--text-primary); border-bottom:1px solid var(--border-light); vertical-align:middle; }
-    .plnt-table td:first-child { padding-left:20px; }
-    .plnt-table td:last-child  { padding-right:20px; }
-    .plnt-table tbody tr:last-child td { border-bottom:none; }
-    .plnt-table tbody tr:hover { background:var(--bg-card2); }
-    .row-odd { background:rgba(0,0,0,.015); }
+        <div style="margin-bottom:20px">
+          <label class="modal-field-lbl" for="ed-desc">Descripción <span style="color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0">— opcional</span></label>
+          <input id="ed-desc" class="lf-ctrl" [(ngModel)]="editDescripcion"
+                 maxlength="300" placeholder="Descripción breve para identificarla"
+                 style="height:40px">
+        </div>
 
-    .plnt-badge { display:inline-flex; align-items:center; gap:6px; font-weight:700; font-size:13px; color:var(--accent); background:rgba(0,212,170,.09); padding:4px 12px 4px 8px; border-radius:20px; white-space:nowrap; max-width:240px; overflow:hidden; text-overflow:ellipsis; }
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn-mag btn-ghost btn-sm" (click)="cerrarEditar()">Cancelar</button>
+          <button class="btn-mag btn-primary btn-sm"
+                  [disabled]="!editNombre.trim() || guardandoEdicion"
+                  (click)="guardarEdicion()">
+            <span *ngIf="guardandoEdicion" class="material-icons-round spin-anim" style="font-size:15px">refresh</span>
+            Guardar cambios
+          </button>
+        </div>
 
-    .td-muted { color:var(--text-muted); font-size:13px; }
+      </div>
+    </div>
 
-    /* ── Tipo chip ── */
-    .tipo-chip { display:inline-flex; align-items:center; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700; letter-spacing:.04em; white-space:nowrap; }
-    .tipo-I { background:rgba(59,130,246,.12);  color:#3b82f6; }
-    .tipo-E { background:rgba(234,179,8,.12);   color:#d97706; }
-    .tipo-P { background:rgba(0,212,170,.12);   color:var(--accent); }
-    .tipo-N { background:rgba(168,85,247,.12);  color:#a855f7; }
-    .tipo-T { background:rgba(107,114,128,.12); color:#6b7280; }
+    <!-- ══════════════════════════════════════════════════════════════
+         Modal Eliminar
+    ══════════════════════════════════════════════════════════════ -->
+    <div *ngIf="modalEliminar" class="modal-overlay" style="z-index:1002" (click)="cerrarEliminar()">
+      <div class="cancel-modal" (click)="$event.stopPropagation()">
 
-    /* ── Row actions ── */
-    .row-acts { display:flex; justify-content:flex-end; align-items:center; gap:6px; }
-    .act-btn  { display:inline-flex; align-items:center; gap:4px; padding:5px 10px; border-radius:7px; border:1px solid; font-size:12px; font-weight:600; cursor:pointer; background:transparent; transition:background .15s; white-space:nowrap; }
-    .act-use  { color:var(--accent)!important; border-color:rgba(0,212,170,.3)!important; }
-    .act-use:hover { background:rgba(0,212,170,.08)!important; }
-    .act-edit { color:#d97706!important; border-color:rgba(217,119,6,.3)!important; }
-    .act-edit:hover { background:rgba(217,119,6,.06)!important; }
-    .act-del  { color:#dc2626!important; border-color:rgba(220,38,38,.3)!important; }
-    .act-del:hover { background:rgba(220,38,38,.06)!important; }
+        <div class="cancel-modal-hdr">
+          <div class="cancel-icon-wrap">
+            <span class="material-icons-round" style="font-size:22px">delete_forever</span>
+          </div>
+          <div>
+            <div style="font-size:15px;font-weight:700;color:var(--text-primary)">Eliminar plantilla</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:2px">
+              Esta acción no se puede deshacer
+            </div>
+          </div>
+        </div>
 
-    /* ── Modals ── */
-    .mod-overlay { position:fixed; inset:0; z-index:1001; background:rgba(0,0,0,.55); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; padding:20px; }
-    .mod-card    { background:var(--bg-card); border-radius:16px; width:100%; max-width:480px; box-shadow:0 24px 60px rgba(0,0,0,.3); overflow:hidden; }
-    .mod-sm      { max-width:420px; }
+        <div style="margin-bottom:20px">
+          <div class="modal-field-lbl">Plantilla</div>
+          <div class="modal-uuid-box">
+            <span class="material-icons-round" style="font-size:14px;vertical-align:middle;margin-right:6px;color:var(--accent)">bookmark</span>
+            {{ plantillaAEliminar?.nombre }}
+          </div>
+          <p style="font-size:13px;color:var(--text-muted);margin:10px 0 0">
+            ¿Confirmas que deseas eliminar esta plantilla?
+          </p>
+        </div>
 
-    .mod-hdr { display:flex; align-items:center; gap:14px; padding:20px; border-bottom:1px solid var(--border-light); }
-    .mod-icon-wrap { width:42px; height:42px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-    .mod-title { font-size:15px; font-weight:700; color:var(--text-primary); }
-    .mod-sub   { font-size:12px; color:var(--text-muted); margin-top:2px; }
-    .mod-close { width:32px; height:32px; border-radius:8px; border:none; background:transparent; color:var(--text-muted); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .15s; flex-shrink:0; }
-    .mod-close:hover { background:var(--bg-card2); }
-    .mod-close .material-icons-round { font-size:18px; }
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn-mag btn-ghost btn-sm" (click)="cerrarEliminar()">Cancelar</button>
+          <button class="btn-mag btn-sm modal-btn-cancel"
+                  [disabled]="eliminando" (click)="eliminar()">
+            <span *ngIf="eliminando" class="material-icons-round spin-anim" style="font-size:15px">refresh</span>
+            <span *ngIf="!eliminando" class="material-icons-round" style="font-size:15px">delete</span>
+            {{ eliminando ? 'Eliminando...' : 'Eliminar' }}
+          </button>
+        </div>
 
-    .mod-body { padding:20px; }
-    .mod-fg   { display:flex; flex-direction:column; gap:6px; margin-bottom:16px; }
-    .mod-lbl  { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted); }
-    .mod-input { padding:10px 12px; border-radius:8px; border:1px solid var(--border-light); background:var(--bg-card2); color:var(--text-primary); font-size:14px; width:100%; box-sizing:border-box; transition:border-color .15s; }
-    .mod-input:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(0,212,170,.12); }
+      </div>
+    </div>
 
-    .mod-name-box { display:flex; align-items:center; gap:8px; padding:11px 14px; background:var(--bg-card2); border-radius:8px; border-left:3px solid var(--accent); font-weight:600; font-size:14px; color:var(--text-primary); }
+    <!-- ════════════════════  STYLES  ════════════════════ -->
+    <style>
+      @keyframes spin { to { transform:rotate(360deg); } }
+      .spin-anim { animation:spin 1s linear infinite; }
 
-    .mod-ftr { display:flex; justify-content:flex-end; gap:10px; padding:16px 20px; border-top:1px solid var(--border-light); background:var(--bg-card2); }
+      /* ── Page layout ── */
+      .list-wrap { width:100%; }
+      .list-ph { display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:24px; }
+      .list-ph h1 { font-family:var(--font-display);font-size:22px;font-weight:800;margin:0 0 4px; }
+      .list-ph p  { font-size:13px;color:var(--text-muted);margin:0; }
 
-    .mod-btn-del { display:inline-flex; align-items:center; gap:6px; padding:8px 18px; border-radius:8px; border:none; background:#dc2626; color:#fff; font-size:14px; font-weight:600; cursor:pointer; transition:background .15s; }
-    .mod-btn-del:hover:not(:disabled) { background:#b91c1c; }
-    .mod-btn-del:disabled { opacity:.6; cursor:default; }
+      /* ── Card ── */
+      .list-card { background:var(--bg-card);border:1px solid var(--border-light);border-radius:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.05); }
 
-    @keyframes spin { to { transform:rotate(360deg); } }
-    .spin-ico { animation:spin 1s linear infinite; }
+      /* ── Filters ── */
+      .list-filters { display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;padding:16px 20px; }
+      .lf-group { display:flex;flex-direction:column;gap:5px;flex:1;min-width:120px; }
+      .lf-search { min-width:200px; }
+      .lf-lbl { font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted); }
+      .lf-sel-wrap { position:relative; }
+      .lf-ico { position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:18px;color:var(--text-muted);pointer-events:none; }
+      .lf-ctrl {
+        display:block;width:100%;height:38px;padding:0 12px;
+        border:1.5px solid var(--border);border-radius:var(--radius-sm,6px);
+        font-family:var(--font-body);font-size:13px;
+        color:var(--text-primary);background:var(--bg-card);
+        outline:none;box-sizing:border-box;
+        -webkit-appearance:none;appearance:none;
+        transition:border-color .15s,box-shadow .15s;
+      }
+      .lf-ctrl:focus { border-color:var(--accent);box-shadow:0 0 0 3px rgba(59,99,217,.1); }
+      .lf-sel-wrap .lf-ctrl { padding-right:34px; }
+      .lf-reset { flex-shrink:0;align-self:flex-end; }
 
-    .animate-in { animation:fadeUp .3s ease both; }
-    .delay-1    { animation-delay:.05s; }
-    .delay-2    { animation-delay:.1s; }
-    @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+      /* ── Skeleton ── */
+      .skeleton-row { display:flex;gap:16px;padding:14px 20px;border-bottom:1px solid var(--border-light);align-items:center; }
+      .skeleton-row:last-child { border-bottom:none; }
 
-    @media (max-width:768px) {
-      .list-wrap { padding:20px 16px; }
-      .hide-sm   { display:none; }
-      .row-acts  { gap:4px; }
-    }
-  `]
+      /* ── Empty ── */
+      .empty-state { text-align:center;padding:60px 20px;display:flex;flex-direction:column;align-items:center;gap:10px; }
+      .empty-icon  { width:56px;height:56px;border-radius:50%;background:var(--bg-card2);display:flex;align-items:center;justify-content:center; }
+      .empty-icon .material-icons-round { font-size:28px;color:var(--text-muted); }
+      .empty-title { font-size:15px;font-weight:700;color:var(--text-primary); }
+      .empty-desc  { font-size:13px;color:var(--text-muted);max-width:380px;line-height:1.6; }
+
+      /* ── Table ── */
+      .cfdis-table { width:100%;border-collapse:collapse; }
+      .cfdis-table thead tr { background:var(--bg-card2); }
+      .cfdis-table th { padding:10px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);white-space:nowrap;border-bottom:1px solid var(--border-light); }
+      .cfdis-table td { padding:12px 14px;border-bottom:1px solid var(--border-light);vertical-align:middle; }
+      .cfdis-table tbody tr:last-child td { border-bottom:none; }
+      .cfdi-row { cursor:pointer;transition:background .1s; }
+      .cfdi-row:hover { background:rgba(59,99,217,.04); }
+      .col-actions { text-align:center;width:1%;white-space:nowrap; }
+      .col-fecha { white-space:nowrap;font-size:12px;color:var(--text-muted); }
+
+      /* ── Tipo badge ── */
+      .tipo-badge { display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:7px;font-family:var(--font-display);font-weight:800;font-size:12px;white-space:nowrap; }
+      .tipo-badge-name { font-size:11px;font-weight:600;font-family:var(--font-body); }
+
+      /* ── Name / desc ── */
+      .receptor-name { font-size:13px;font-weight:600;color:var(--text-primary); }
+
+      /* ── Action buttons ── */
+      .action-btns { display:flex;gap:4px;align-items:center;justify-content:center; }
+      .act-btn { width:30px;height:30px;border-radius:7px;border:1.5px solid;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;transition:.15s;background:transparent; }
+      .act-btn .material-icons-round { font-size:16px; }
+      .act-btn:hover { transform:translateY(-1px); }
+      .act-use    { color:#059669;border-color:rgba(5,150,105,.25); }
+      .act-use:hover    { background:rgba(5,150,105,.08);border-color:rgba(5,150,105,.5); }
+      .act-edit   { color:#d97706;border-color:rgba(217,119,6,.25); }
+      .act-edit:hover   { background:rgba(217,119,6,.08);border-color:rgba(217,119,6,.5); }
+      .act-cancel { color:#dc2626;border-color:rgba(220,38,38,.2); }
+      .act-cancel:hover { background:rgba(220,38,38,.08);border-color:rgba(220,38,38,.5); }
+
+      /* ── Modals ── */
+      .modal-overlay { position:fixed;inset:0;z-index:1001;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px; }
+      .cancel-modal { background:var(--bg-card);border-radius:16px;width:100%;max-width:460px;padding:24px;box-shadow:0 24px 60px rgba(0,0,0,.3); }
+      .cancel-modal-hdr { display:flex;align-items:center;gap:14px;margin-bottom:20px; }
+      .cancel-icon-wrap { width:44px;height:44px;border-radius:12px;background:rgba(220,38,38,.1);color:#dc2626;display:flex;align-items:center;justify-content:center;flex-shrink:0; }
+      .modal-field-lbl { font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);display:block;margin-bottom:6px; }
+      .modal-uuid-box  { font-family:inherit;font-size:13px;background:var(--bg-card2);padding:10px 12px;border-radius:6px;word-break:break-all;color:var(--text-secondary);font-weight:600; }
+      .modal-btn-cancel { background:#dc2626 !important;color:#fff !important;border:none !important;display:inline-flex;align-items:center;gap:6px; }
+      .modal-btn-cancel:disabled { opacity:.6; }
+
+      /* ── Animations ── */
+      .animate-in { animation:fadeUp .3s ease both; }
+      .delay-1    { animation-delay:.05s; }
+      .delay-2    { animation-delay:.1s; }
+      @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+    </style>
+  `
 })
 export class PlantillasCfdiComponent implements OnInit {
   plantillas: PlantillaCfdi[] = [];
   filtradas:  PlantillaCfdi[] = [];
   cargando    = true;
   filtroTexto = '';
+  filtroTipo  = '';
 
   modalEditar       = false;
   plantillaEditando: PlantillaCfdi | null = null;
@@ -350,24 +365,43 @@ export class PlantillasCfdiComponent implements OnInit {
   }
 
   aplicarFiltros(): void {
+    let result = [...this.plantillas];
     const q = this.filtroTexto.toLowerCase().trim();
-    this.filtradas = q
-      ? this.plantillas.filter(p =>
-          p.nombre.toLowerCase().includes(q) ||
-          (p.descripcion?.toLowerCase().includes(q) ?? false))
-      : [...this.plantillas];
+    if (q) {
+      result = result.filter(p =>
+        p.nombre.toLowerCase().includes(q) ||
+        (p.descripcion?.toLowerCase().includes(q) ?? false));
+    }
+    if (this.filtroTipo) {
+      result = result.filter(p => this.tipoKey(p) === this.filtroTipo);
+    }
+    this.filtradas = result;
+  }
+
+  resetFiltros(): void {
+    this.filtroTexto = '';
+    this.filtroTipo  = '';
+    this.aplicarFiltros();
+  }
+
+  tipoKey(p: PlantillaCfdi): string {
+    try { return JSON.parse(p.datosJson).tipoCfdi ?? 'I'; } catch { return 'I'; }
   }
 
   tipoLabel(p: PlantillaCfdi): string {
-    try {
-      const d = JSON.parse(p.datosJson);
-      const map: Record<string, string> = { I: 'Ingreso', E: 'Egreso', P: 'Pago', N: 'Nómina', T: 'Traslado' };
-      return map[d.tipoCfdi] ?? d.tipoCfdi ?? '—';
-    } catch { return '—'; }
+    const map: Record<string, string> = { I: 'Ingreso', E: 'Egreso', P: 'C.Pago', N: 'Nómina', T: 'Traslado' };
+    return map[this.tipoKey(p)] ?? this.tipoKey(p);
   }
 
-  tipoColor(p: PlantillaCfdi): string {
-    try { return JSON.parse(p.datosJson).tipoCfdi ?? 'I'; } catch { return 'I'; }
+  tipoColor(p: PlantillaCfdi): { bg: string; text: string } {
+    const m: Record<string, { bg: string; text: string }> = {
+      I: { bg: 'rgba(59,99,217,.10)',  text: 'var(--accent)'  },
+      E: { bg: 'rgba(239,68,68,.10)',  text: 'var(--danger)'  },
+      T: { bg: 'rgba(99,102,241,.10)', text: '#6366f1'        },
+      N: { bg: 'rgba(124,58,237,.10)', text: '#7c3aed'        },
+      P: { bg: 'rgba(245,158,11,.15)', text: '#b45309'        },
+    };
+    return m[this.tipoKey(p)] ?? { bg: 'var(--bg-card2)', text: 'var(--text-muted)' };
   }
 
   usar(p: PlantillaCfdi): void {

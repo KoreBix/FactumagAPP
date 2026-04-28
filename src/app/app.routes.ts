@@ -22,8 +22,9 @@ export const routes: Routes = [
       { path: 'rfcs/new',  loadComponent: () => import('./features/rfcs/rfc.form.component').then(m => m.RfcFormComponent) },
       { path: 'rfcs/:id',  loadComponent: () => import('./features/rfcs/rfc.form.component').then(m => m.RfcFormComponent) },
       { path: 'wallet',    loadComponent: () => import('./features/wallet/wallet.component').then(m => m.WalletComponent) },
-      { path: 'cfdis',     loadComponent: () => import('./features/cfdis/cfdis.component').then(m => m.CfdisComponent) },
-      { path: 'cfdis/new', loadComponent: () => import('./features/cfdis/cfdi.emitir.component').then(m => m.CfdiEmitirComponent) },
+      { path: 'cfdis',         loadComponent: () => import('./features/cfdis/cfdis.component').then(m => m.CfdisComponent) },
+      { path: 'cfdis/new',    loadComponent: () => import('./features/cfdis/cfdi.emitir.component').then(m => m.CfdiEmitirComponent) },
+      { path: 'cfdis/masivo', loadComponent: () => import('./features/cfdis/cfdi.masivo.component').then(m => m.CfdiMasivoComponent) },
       { path: 'perfil',    loadComponent: () => import('./features/perfil/perfil.component').then(m => m.PerfilComponent) },
       { path: 'series',     loadComponent: () => import('./features/series/series.component').then(m => m.SeriesComponent) },
       { path: 'series/new', loadComponent: () => import('./features/series/serie.form.component').then(m => m.SerieFormComponent) },
@@ -46,6 +47,7 @@ export const routes: Routes = [
       { path: 'cotizaciones/new',   loadComponent: () => import('./features/cotizaciones/cotizacion.form.component').then(m => m.CotizacionFormComponent) },
       { path: 'cotizaciones/:id',         loadComponent: () => import('./features/cotizaciones/cotizacion.form.component').then(m => m.CotizacionFormComponent) },
       { path: 'cotizaciones/:id/editar',  loadComponent: () => import('./features/cotizaciones/cotizacion.form.component').then(m => m.CotizacionFormComponent) },
+      { path: 'equipo',                  loadComponent: () => import('./features/equipo/equipo.component').then(m => m.EquipoComponent) },
       {
         path: 'sso/callback',
         loadComponent: () =>
